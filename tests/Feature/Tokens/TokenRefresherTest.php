@@ -113,7 +113,7 @@ describe('a refresh the provider accepts', function (): void {
     it('works with the refresh token of a whole login', function (): void {
         $flow = resolve(AuthorizationFlow::class);
         $request = $flow->start();
-        $login = $flow->callback(Request::create('/oidc/callback', 'GET', $this->provider->approve($request->url)));
+        $login = $flow->callback(Request::create('https://app.example.test/oidc/callback', 'GET', $this->provider->approve($request->url)));
 
         $result = resolve(TokenRefresher::class)->refresh($login->claims, (string) $login->tokens->refreshToken);
 

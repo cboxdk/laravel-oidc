@@ -82,7 +82,7 @@ describe('the quickstart', function (): void {
         $query = $provider->approve((string) $login->headers->get('Location'), ['sub' => 'ada', 'email' => 'ada@example.com', 'name' => 'Ada']);
 
         $this->withCookie((string) config('session.cookie'), (string) $login->getCookie((string) config('session.cookie'))?->getValue())
-            ->get('/oidc/callback?'.http_build_query($query))
+            ->get('https://app.example.test/oidc/callback?'.http_build_query($query))
             ->assertRedirect('/');
 
         $this->assertAuthenticated();

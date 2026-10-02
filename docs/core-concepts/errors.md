@@ -40,6 +40,7 @@ secret.
 | `oidc_state_mismatch` | `CallbackRejected` | The callback's state matches no login this session started for the connection: forged, used already, from another browser, or the session was lost on the way. | Start again |
 | `oidc_transaction_expired` | `CallbackRejected` | The login was started longer ago than `oidc.flow.transaction_ttl_seconds`. | Start again |
 | `oidc_callback_issuer_mismatch` | `CallbackRejected` | The callback's `iss` is missing although the provider announces it, or names another issuer (RFC 9207). | Start again |
+| `oidc_callback_url_mismatch` | `CallbackRejected` | The callback arrived at another host or path than its login's `redirect_uri`: a response meant for another connection, or a proxy that does not forward the host. | Start again |
 | `oidc_callback_invalid` | `CallbackRejected` | The callback has no usable code, or a parameter in another form than one string. | Start again |
 | `oidc_authorization_denied` | `AuthorizationDenied` | The provider answered with an OAuth error; `error()` gives the code, `interactionRequired()` tells a silent login that needs the person. | Start again |
 | `oidc_token_request_rejected` | `TokenRequestRejected` | The token endpoint refused the request; `error()` gives the code, such as `invalid_grant` or `invalid_client`, and `refreshTokenInvalid()` tells a refresh token that is no longer valid. | Depends on the code |

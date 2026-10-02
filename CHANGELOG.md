@@ -191,3 +191,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or number in `config/oidc.php` ending in a newline passed its check, because
   `$` in a PHP pattern also matches before a final newline. Every anchored
   pattern now uses the `D` modifier.
+
+### Security
+
+- **Mix-up defence without the iss parameter.** Two connections may no longer
+  share a `redirect_uri` (host and path), and `callback()` refuses a request
+  that did not arrive at the host and path of its login's `redirect_uri`, with
+  the new code `oidc_callback_url_mismatch`. Before, an application that
+  served several connections from one callback route could finish a login of
+  one connection with a code another provider issued, when that provider sent
+  no `iss`.

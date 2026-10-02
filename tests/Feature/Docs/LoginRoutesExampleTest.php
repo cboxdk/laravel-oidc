@@ -24,6 +24,10 @@ beforeEach(function (): void {
         unlink($file);
     }
 
+    // The routes serve /oidc/<connection>/callback, so that is each
+    // connection's redirect_uri.
+    config(['oidc.connections.main.redirect_uri' => 'https://app.example.test/oidc/main/callback']);
+
     $this->provider = new FakeProvider()->install();
     $this->sessionCookie = fn (TestResponse $response): string => (string) $response->getCookie((string) config('session.cookie'))?->getValue();
 });
@@ -35,7 +39,7 @@ it('runs a login through the documented routes', function (): void {
     $query = $this->provider->approve((string) $login->headers->get('Location'), ['groups' => ['staff']]);
 
     $this->withCookie((string) config('session.cookie'), ($this->sessionCookie)($login))
-        ->get('/oidc/main/callback?'.http_build_query($query))
+        ->get('https://app.example.test/oidc/main/callback?'.http_build_query($query))
         ->assertOk()
         ->assertExactJson(['issuer' => FakeProvider::ISSUER, 'subject' => 'user-1', 'tenant' => null, 'groups' => ['staff'], 'has_refresh_token' => true]);
 });
@@ -49,7 +53,7 @@ it('tells a person of another Google Workspace domain that their organisation ca
     $query = $google->approve((string) $login->headers->get('Location'), ['hd' => 'example.org']);
 
     $this->withCookie((string) config('session.cookie'), ($this->sessionCookie)($login))
-        ->get('/oidc/workspace/callback?'.http_build_query($query))
+        ->get('https://app.example.test/oidc/workspace/callback?'.http_build_query($query))
         ->assertRedirect('/')
         ->assertSessionHas('status', 'Your organisation cannot sign in here.');
 });
@@ -59,7 +63,7 @@ it('refuses a login whose ID token fails verification', function (): void {
     $query = $this->provider->approve((string) $login->headers->get('Location'), ['nonce' => 'another-login']);
 
     $this->withCookie((string) config('session.cookie'), ($this->sessionCookie)($login))
-        ->get('/oidc/main/callback?'.http_build_query($query))
+        ->get('https://app.example.test/oidc/main/callback?'.http_build_query($query))
         ->assertRedirect('/')
         ->assertSessionHas('status', 'Sign-in failed. Please try again.');
 });
@@ -71,7 +75,7 @@ it('refuses a callback from another browser', function (): void {
     // Another browser has another session.
     $this->flushSession();
 
-    $this->get('/oidc/main/callback?'.http_build_query($query))
+    $this->get('https://app.example.test/oidc/main/callback?'.http_build_query($query))
         ->assertRedirect('/')
         ->assertSessionHas('status', 'Sign-in failed. Please try again.');
 
@@ -83,7 +87,7 @@ it('starts an interactive login when a silent one needs the person', function ()
     $query = $this->provider->deny((string) $login->headers->get('Location'), 'login_required');
 
     $retry = $this->withCookie((string) config('session.cookie'), ($this->sessionCookie)($login))
-        ->get('/oidc/main/callback?'.http_build_query($query));
+        ->get('https://app.example.test/oidc/main/callback?'.http_build_query($query));
 
     $retry->assertRedirect();
     expect($retry->headers->get('Location'))->toStartWith(FakeProvider::AUTHORIZATION_URL.'?');
@@ -94,7 +98,7 @@ it('answers a cancelled login', function (): void {
     $query = $this->provider->deny((string) $login->headers->get('Location'));
 
     $this->withCookie((string) config('session.cookie'), ($this->sessionCookie)($login))
-        ->get('/oidc/main/callback?'.http_build_query($query))
+        ->get('https://app.example.test/oidc/main/callback?'.http_build_query($query))
         ->assertRedirect('/')
         ->assertSessionHas('status', 'Sign-in was cancelled.');
 });

@@ -19,6 +19,7 @@ use Cbox\Oidc\Exceptions\TenantRejected;
 use Cbox\Oidc\Exceptions\TokenRejected;
 use Cbox\Oidc\Support\Base64Url;
 use Cbox\Oidc\Support\OAuthError;
+use Cbox\Oidc\Support\Url;
 use Cbox\Oidc\Tokens\IdTokenExpectations;
 use Cbox\Oidc\Tokens\IdTokenVerifier;
 use Cbox\Oidc\Tokens\TokenEndpoint;
@@ -41,15 +42,18 @@ use Psr\Clock\ClockInterface;
  * 1. the state must match a login this session started for this connection,
  *    which is then used up, and the login must be younger than
  *    oidc.flow.transaction_ttl_seconds;
- * 2. the iss parameter must equal the pinned issuer when the callback has one
+ * 2. the request must have arrived at the login's redirect_uri (host and
+ *    path), so a response meant for another connection is refused;
+ * 3. the iss parameter must equal the pinned issuer when the callback has one
  *    or the provider announces it (RFC 9207);
- * 3. an error answer from the provider becomes {@see AuthorizationDenied};
- * 4. the code must be present and well formed;
- * 5. the code is exchanged, with the PKCE verifier and the connection's
+ * 4. an error answer from the provider becomes {@see AuthorizationDenied};
+ * 5. the code must be present and well formed;
+ * 6. the code is exchanged, with the PKCE verifier and the connection's
  *    client authentication;
- * 6. the ID token is verified ({@see IdTokenVerifier}) against the login's
- *    nonce and max_age, the access token's at_hash and the callback's iss;
- * 7. when the connection reads groups from userinfo, userinfo is called with
+ * 7. the ID token is verified ({@see IdTokenVerifier}) against the login's
+ *    nonce, max_age and acr values, the access token's at_hash and the
+ *    callback's iss;
+ * 8. when the connection reads groups from userinfo, userinfo is called with
  *    the access token ({@see UserInfoEndpoint}), and its groups go into the
  *    claims.
  *
@@ -122,6 +126,7 @@ final readonly class AuthorizationFlow
         $config = $this->config->connection($connection);
         $parameters = CallbackParameters::fromRequest($request, $config->name);
         $transaction = $this->transaction($config, $parameters);
+        $this->assertCallbackUrl($config, $transaction, $request);
         $metadata = $this->metadata->for($config);
 
         $this->assertIssuer($config, $metadata, $parameters->iss);
@@ -182,6 +187,21 @@ final readonly class AuthorizationFlow
         }
 
         return $transaction;
+    }
+
+    /**
+     * The callback must arrive where the login said it would. Connections never
+     * share a redirect_uri ({@see OidcConfig::fromArray()}), so this binds the
+     * response to the connection whose login it finishes, also when the
+     * provider sends no iss parameter.
+     */
+    private function assertCallbackUrl(ConnectionConfig $config, AuthorizationTransaction $transaction, Request $request): void
+    {
+        $actual = Url::target($request->getHost(), $request->getBaseUrl().$request->getPathInfo());
+
+        if ($actual !== Url::callbackTarget($transaction->redirectUri)) {
+            throw CallbackRejected::wrongUrl($config->name, Url::withoutQuery($transaction->redirectUri), $request->getHost().$request->getBaseUrl().$request->getPathInfo());
+        }
     }
 
     /**

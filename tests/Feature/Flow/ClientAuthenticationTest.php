@@ -21,7 +21,7 @@ beforeEach(function (): void {
         app()->forgetInstance(AuthorizationFlow::class);
         $flow = resolve(AuthorizationFlow::class);
 
-        return $flow->callback(Request::create('/oidc/callback', 'GET', $this->provider->approve($flow->start()->url)));
+        return $flow->callback(Request::create('https://app.example.test/oidc/callback', 'GET', $this->provider->approve($flow->start()->url)));
     };
 });
 

@@ -91,6 +91,40 @@ it('keeps several named connections apart', function (): void {
         ->and($config->connection('main')->hasTenantTemplate())->toBeFalse();
 });
 
+it('refuses two connections that share a callback URL', function (string $first, string $second): void {
+    try {
+        OidcConfig::fromArray(['connections' => [
+            'main' => ConnectionFixtures::minimal(['redirect_uri' => $first]),
+            'other' => ConnectionFixtures::minimal(['client_id' => 'client-2', 'redirect_uri' => $second]),
+        ]]);
+    } catch (InvalidConfiguration $exception) {
+        expect($exception->key())->toBe('oidc.connections.other.redirect_uri')
+            ->and($exception->getMessage())->toContain('is the redirect_uri of connection "main" too')
+            ->and($exception->fix())->toContain('/oidc/other/callback');
+
+        return;
+    }
+
+    test()->fail('Two connections with one callback URL were accepted.');
+})->with([
+    'the same URL' => ['https://app.example.test/oidc/callback', 'https://app.example.test/oidc/callback'],
+    'another case of the host' => ['https://app.example.test/oidc/callback', 'https://APP.example.test/oidc/callback'],
+    'a trailing slash' => ['https://app.example.test/oidc/callback', 'https://app.example.test/oidc/callback/'],
+    'another port' => ['https://app.example.test/oidc/callback', 'https://app.example.test:8443/oidc/callback'],
+    'another query' => ['https://app.example.test/oidc/callback?a=1', 'https://app.example.test/oidc/callback?a=2'],
+    'an encoded path' => ['https://app.example.test/oidc/callback', 'https://app.example.test/oidc/%63allback'],
+]);
+
+it('accepts connections whose callbacks differ in host or path', function (): void {
+    $config = OidcConfig::fromArray(['connections' => [
+        'main' => ConnectionFixtures::minimal(),
+        'other' => ConnectionFixtures::minimal(['redirect_uri' => 'https://app.example.test/oidc/other/callback']),
+        'third' => ConnectionFixtures::minimal(['redirect_uri' => 'https://other.example.test/oidc/callback']),
+    ]]);
+
+    expect($config->names())->toBe(['main', 'other', 'third']);
+});
+
 it('defaults to the first connection when no default is set', function (): void {
     $config = OidcConfig::fromArray(['connections' => ['first' => ConnectionFixtures::minimal(), 'second' => ConnectionFixtures::google()]]);
 

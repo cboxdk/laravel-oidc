@@ -140,7 +140,7 @@ describe('a login of a connection that reads groups from userinfo', function ():
             $flow = resolve(AuthorizationFlow::class);
             $request = $flow->start();
 
-            return $flow->callback(Request::create('/oidc/callback', 'GET', $this->provider->approve($request->url, $claims)));
+            return $flow->callback(Request::create('https://app.example.test/oidc/callback', 'GET', $this->provider->approve($request->url, $claims)));
         };
     });
 
@@ -163,7 +163,7 @@ describe('a login of a connection that reads groups from userinfo', function ():
 it('does not call userinfo during a login of a connection that reads groups from the ID token', function (): void {
     $flow = resolve(AuthorizationFlow::class);
     $request = $flow->start();
-    $result = $flow->callback(Request::create('/oidc/callback', 'GET', $this->provider->approve($request->url, ['groups' => ['staff']])));
+    $result = $flow->callback(Request::create('https://app.example.test/oidc/callback', 'GET', $this->provider->approve($request->url, ['groups' => ['staff']])));
 
     expect($result->userInfo)->toBeNull()
         ->and($result->claims->groups)->toBe(['staff'])

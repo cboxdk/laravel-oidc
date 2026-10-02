@@ -29,7 +29,7 @@ beforeEach(function (): void {
     $this->freezeSecond();
     $this->provider = new FakeProvider()->install();
     $this->flow = fn (): AuthorizationFlow => resolve(AuthorizationFlow::class);
-    $this->callback = fn (array $query, ?string $connection = null): CallbackResult => ($this->flow)()->callback(Request::create('/oidc/callback', 'GET', $query), $connection);
+    $this->callback = fn (array $query, ?string $connection = null): CallbackResult => ($this->flow)()->callback(ConnectionFixtures::callbackRequest($query, $connection), $connection);
 });
 
 /**
@@ -195,6 +195,40 @@ it('accepts a login at the end of its lifetime', function (): void {
 
     expect(($this->callback)($query)->tokens->tokenType)->toBe('Bearer');
 });
+
+it('refuses a callback that arrives at another connection\'s redirect_uri, also without iss (mix-up)', function (): void {
+    $request = ($this->flow)()->start();
+    $query = $this->provider->approve($request->url);
+    unset($query['iss']);
+
+    // An application whose one callback route takes the connection from the
+    // session: the browser came back to the workspace connection's URL.
+    $arrived = Request::create('https://app.example.test/oidc/workspace/callback', 'GET', $query);
+
+    rejectedWith(fn () => ($this->flow)()->callback($arrived, 'main'), CallbackRejected::class, ErrorCode::CallbackUrlMismatch, 'arrived at app.example.test/oidc/workspace/callback, but its login was started with the redirect_uri https://app.example.test/oidc/callback');
+
+    expect($this->provider->tokenRequests)->toBe([])
+        ->and(fn () => ($this->callback)($query))->toThrow(CallbackRejected::class, '[oidc_state_mismatch]');
+});
+
+it('refuses a callback on another host than the redirect_uri', function (): void {
+    $request = ($this->flow)()->start();
+    $arrived = Request::create('https://evil.example.test/oidc/callback', 'GET', $this->provider->approve($request->url));
+
+    rejectedWith(fn () => ($this->flow)()->callback($arrived), CallbackRejected::class, ErrorCode::CallbackUrlMismatch, 'arrived at evil.example.test/oidc/callback');
+});
+
+it('accepts a callback whose scheme or port a proxy changed', function (string $url): void {
+    $request = ($this->flow)()->start();
+    $arrived = Request::create($url, 'GET', $this->provider->approve($request->url));
+
+    expect(($this->flow)()->callback($arrived)->connection)->toBe('main');
+})->with([
+    'http behind a proxy that ends TLS' => ['http://app.example.test/oidc/callback'],
+    'an internal port' => ['http://app.example.test:8080/oidc/callback'],
+    'another case of the host' => ['https://APP.example.test/oidc/callback'],
+    'a trailing slash' => ['https://app.example.test/oidc/callback/'],
+]);
 
 it('refuses an iss parameter that is not the pinned issuer (RFC 9207)', function (): void {
     $query = [...$this->provider->approve(($this->flow)()->start()->url), 'iss' => 'https://evil.example.test'];

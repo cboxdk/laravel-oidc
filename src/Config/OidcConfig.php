@@ -6,6 +6,7 @@ namespace Cbox\Oidc\Config;
 
 use Cbox\Oidc\Exceptions\InvalidConfiguration;
 use Cbox\Oidc\Exceptions\UnknownConnection;
+use Cbox\Oidc\Support\Url;
 
 /**
  * The whole of config/oidc.php, parsed and checked.
@@ -32,13 +33,29 @@ readonly class OidcConfig
         $config = ConfigReader::of($values, 'oidc');
         $connectionsConfig = $config->child('connections');
         $connections = [];
+        $callbacks = [];
 
         foreach ($connectionsConfig->names() as $name) {
             if (preg_match('/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/D', $name) !== 1) {
                 throw InvalidConfiguration::at($connectionsConfig->key($name), 'is not a valid connection name', 'Name connections with letters, digits, dots, dashes and underscores, at most 64 characters.');
             }
 
-            $connections[$name] = ConnectionConfig::fromConfig($name, $connectionsConfig->child($name));
+            $connection = ConnectionConfig::fromConfig($name, $connectionsConfig->child($name));
+            $callback = Url::callbackTarget($connection->redirectUri);
+
+            // A callback shared by two connections cannot tell their responses
+            // apart, which is what a mix-up attack needs when the provider
+            // sends no iss parameter (RFC 9207).
+            if (isset($callbacks[$callback])) {
+                throw InvalidConfiguration::at(
+                    $connectionsConfig->key($name).'.redirect_uri',
+                    sprintf('is the redirect_uri of connection "%s" too', $callbacks[$callback]),
+                    sprintf('Give every connection its own callback URL, such as /oidc/%s/callback, with its own route, and register that URL at the provider.', $name),
+                );
+            }
+
+            $callbacks[$callback] = $name;
+            $connections[$name] = $connection;
         }
 
         if ($connections === []) {

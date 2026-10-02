@@ -33,4 +33,24 @@ final class Url
 
         return self::origin($url).($parts['path'] ?? '');
     }
+
+    /**
+     * What tells two callback URLs apart: the host without case and the
+     * decoded path without a trailing slash. Scheme and port are left out,
+     * because a proxy that ends TLS can change both on the way to the
+     * application.
+     */
+    public static function callbackTarget(string $url): string
+    {
+        $parts = parse_url($url);
+
+        return self::target(is_array($parts) ? ($parts['host'] ?? '') : '', is_array($parts) ? ($parts['path'] ?? '') : '');
+    }
+
+    public static function target(string $host, string $path): string
+    {
+        $path = rtrim(rawurldecode($path), '/');
+
+        return strtolower($host).($path === '' ? '/' : $path);
+    }
 }

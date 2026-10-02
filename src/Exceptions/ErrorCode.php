@@ -62,6 +62,12 @@ enum ErrorCode: string
     /** The callback's iss parameter is missing or names another issuer (RFC 9207, mix-up defence). */
     case CallbackIssuerMismatch = 'oidc_callback_issuer_mismatch';
 
+    /**
+     * The callback arrived at another URL (host and path) than the redirect_uri
+     * its login was started with: a response meant for another connection.
+     */
+    case CallbackUrlMismatch = 'oidc_callback_url_mismatch';
+
     /** The provider answered the login with an OAuth error, such as access_denied or login_required. */
     case AuthorizationDenied = 'oidc_authorization_denied';
 

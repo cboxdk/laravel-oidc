@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Cbox\Oidc\Tests\Support;
 
+use Cbox\Oidc\Config\OidcConfig;
+use Illuminate\Http\Request;
+
 /**
  * Connection arrays as an application writes them in config/oidc.php.
  */
@@ -21,6 +24,17 @@ final class ConnectionFixtures
             'client_secret' => 'secret-1',
             'redirect_uri' => 'https://app.example.test/oidc/callback',
         ], $overrides);
+    }
+
+    /**
+     * The callback request a provider's redirect makes: a GET of the
+     * connection's redirect_uri with $query.
+     *
+     * @param  array<string, mixed>  $query
+     */
+    public static function callbackRequest(array $query, ?string $connection = null): Request
+    {
+        return Request::create(resolve(OidcConfig::class)->connection($connection)->redirectUri, 'GET', $query);
     }
 
     /**

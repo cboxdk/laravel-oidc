@@ -67,7 +67,7 @@ it('fetches every time when discovery_ttl_seconds is 0 and stale_if_error is 0',
 });
 
 it('keeps one document per connection', function (): void {
-    config(['oidc.connections.second' => ConnectionFixtures::minimal(['client_id' => 'client-2'])]);
+    config(['oidc.connections.second' => ConnectionFixtures::minimal(['client_id' => 'client-2', 'redirect_uri' => 'https://app.example.test/oidc/second/callback'])]);
     app()->forgetInstance(OidcConfig::class);
 
     ($this->discover)('main');

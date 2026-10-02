@@ -7,8 +7,9 @@ namespace Cbox\Oidc\Exceptions;
 /**
  * The browser came back to the callback with a request the package refuses
  * before it asks the provider for tokens: no login of this session matches
- * its state, the login is too old, the iss parameter is wrong, or the code is
- * missing or malformed.
+ * its state, the login is too old, the request arrived at another URL than the
+ * login's redirect_uri, the iss parameter is wrong, or the code is missing or
+ * malformed.
  *
  * Show the person a "start again" page; never retry the callback itself.
  */
@@ -40,6 +41,15 @@ class CallbackRejected extends OidcException
                 ? sprintf('The callback of connection "%s" has no iss parameter, although the provider announces it (authorization_response_iss_parameter_supported, RFC 9207).', $connection)
                 : sprintf('The callback of connection "%s" names the issuer "%s", but the connection pins "%s" (RFC 9207). The response may come from another provider (a mix-up attack).', $connection, self::shorten($actual), $expected),
             'Start the login again. If it persists, check that each connection has its own redirect_uri, and that the provider\'s callback goes to the route of this connection.',
+        );
+    }
+
+    public static function wrongUrl(string $connection, string $expected, string $actual): self
+    {
+        return new self(
+            ErrorCode::CallbackUrlMismatch,
+            sprintf('The callback of connection "%s" arrived at %s, but its login was started with the redirect_uri %s. The response may be meant for another connection (a mix-up attack).', $connection, self::shorten($actual), $expected),
+            'Start the login again. If every login fails this way, route each connection\'s redirect_uri to a callback that passes that connection, and make sure the request reaches the application with the redirect_uri\'s host (behind a proxy, configure trusted proxies so the forwarded host is used).',
         );
     }
 

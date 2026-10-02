@@ -12,6 +12,7 @@ use Cbox\Oidc\Flow\Prompt;
 use Cbox\Oidc\Logout\LogoutOptions;
 use Cbox\Oidc\OidcConnection;
 use Cbox\Oidc\OidcManager;
+use Cbox\Oidc\Tests\Support\ConnectionFixtures;
 use Cbox\Oidc\Tests\Support\FakeProvider;
 use Cbox\Oidc\Tokens\TokenTypeHint;
 use Illuminate\Http\Request;
@@ -23,7 +24,7 @@ use Illuminate\Http\Request;
 beforeEach(function (): void {
     $this->freezeSecond();
     $this->provider = new FakeProvider()->install();
-    $this->callbackRequest = fn (array $query): Request => Request::create('/oidc/callback', 'GET', $query);
+    $this->callbackRequest = fn (array $query, ?string $connection = null): Request => ConnectionFixtures::callbackRequest($query, $connection);
 });
 
 it('binds the contract to the manager behind the facade', function (): void {
@@ -68,7 +69,7 @@ it('binds the calls to one connection', function (): void {
         ->and($request->url)->toStartWith($google->authorizationUrl.'?')
         ->and($workspace->redirect()->getTargetUrl())->toStartWith($google->authorizationUrl.'?');
 
-    $result = $workspace->callback(($this->callbackRequest)($google->approve($request->url, ['hd' => 'example.com'])));
+    $result = $workspace->callback(($this->callbackRequest)($google->approve($request->url, ['hd' => 'example.com']), 'workspace'));
 
     expect($result->claims->tenant)->toBe('example.com')
         ->and(Oidc::connection()->name)->toBe('main');

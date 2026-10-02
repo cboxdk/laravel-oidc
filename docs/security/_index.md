@@ -55,9 +55,12 @@ the class of report we most want.
 - **Replayed ID tokens.** A fresh nonce per login must come back in the ID
   token, compared in constant time, and the token may be at most
   `max_token_age_seconds` old.
-- **Mix-up attacks.** Each connection has its own callback, and the `iss`
-  parameter (RFC 9207) must be the pinned issuer whenever the callback carries
-  it or the provider announces it.
+- **Mix-up attacks.** Two connections cannot share a `redirect_uri`, and a
+  callback must arrive at the host and path of its login's `redirect_uri`, so
+  a response meant for one connection is never finished by another, also when
+  the provider sends no `iss`. The `iss` parameter (RFC 9207) must be the
+  pinned issuer whenever the callback carries it or the provider announces
+  it.
 - **Injected text.** Only the OAuth error code of an error answer is read, and
   only when it is letters, digits, dots, dashes and underscores;
   `error_description` never reaches a message, log or page.

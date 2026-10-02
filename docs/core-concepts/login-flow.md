@@ -29,8 +29,12 @@ service is not.
 Give each connection its own callback URL, register exactly that URL at the
 provider, and pass the connection to `callback()`. A response meant for one
 provider then never reaches another (the mix-up defence of RFC 9207 section
-1). Both routes need the `web` middleware group, because the login waits in
-the session.
+1). The package holds you to it: two connections with the same `redirect_uri`
+(host and path) are refused as `oidc_config_invalid`, and a callback that
+arrives at another host or path than its login's `redirect_uri` is refused as
+`oidc_callback_url_mismatch`. With the routes below, set each connection's
+`redirect_uri` to `https://your-app/oidc/<connection>/callback`. Both routes
+need the `web` middleware group, because the login waits in the session.
 
 <!-- example: login-routes -->
 ```php
@@ -129,21 +133,26 @@ passes the SSRF guard's redirect check before the browser is sent there.
    for this connection. The login is used up whether the rest passes or not,
    and it must be younger than `oidc.flow.transaction_ttl_seconds` (600 by
    default). Failures: `oidc_state_mismatch`, `oidc_transaction_expired`.
-2. **Issuer (RFC 9207).** When the callback carries `iss`, or the provider
+2. **Callback URL.** The request must have arrived at the host and path of
+   the login's `redirect_uri`. Scheme and port are not compared, because a
+   proxy that ends TLS may change them; behind a proxy, trust it
+   (`trustProxies`) so the forwarded host is used. Failure:
+   `oidc_callback_url_mismatch`.
+3. **Issuer (RFC 9207).** When the callback carries `iss`, or the provider
    announces `authorization_response_iss_parameter_supported`, `iss` must be
    the pinned issuer. For an Entra `{tenantid}` issuer, `iss` must be the
    template with one tenant filled in. Failure: `oidc_callback_issuer_mismatch`.
-3. **Error.** An `error` answer becomes `AuthorizationDenied`
+4. **Error.** An `error` answer becomes `AuthorizationDenied`
    (`oidc_authorization_denied`) with the error code in `error()`.
    `error_description` is never read: anyone can put text in a callback URL.
-4. **Code.** It must be present and 1 to 2048 printable ASCII characters.
+5. **Code.** It must be present and 1 to 2048 printable ASCII characters.
    Failure: `oidc_callback_invalid`.
-5. **Exchange.** The code goes to the token endpoint with the PKCE verifier,
+6. **Exchange.** The code goes to the token endpoint with the PKCE verifier,
    the redirect URI and the connection's client authentication. The response
    must be JSON with an `access_token`, `token_type` Bearer and an `id_token`.
    An OAuth error is `TokenRequestRejected` (`oidc_token_request_rejected`)
    with its code in `error()`.
-6. **ID token.** The ID token is verified against the login's nonce and
+7. **ID token.** The ID token is verified against the login's nonce and
    `max_age`, the access token (`at_hash`) and the callback's `iss`: the
    signature, the issuer and tenant, the audience, the times and every other
    rule of [ID token verification](id-token-verification.md). A failure is

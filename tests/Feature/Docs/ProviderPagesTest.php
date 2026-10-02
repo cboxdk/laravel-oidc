@@ -55,7 +55,7 @@ it('signs in through the documented configuration', function (string $example, a
     $provider->install();
 
     $request = Oidc::start();
-    $result = Oidc::callback(request: Request::create('/callback', 'GET', $provider->approve($request->url, [...$claims, 'sub' => 'person-1'])));
+    $result = Oidc::callback(request: Request::create($connection->redirectUri, 'GET', $provider->approve($request->url, [...$claims, 'sub' => 'person-1'])));
 
     expect($result->connection)->toBe($connection->name)
         ->and($result->claims->subject)->toBe('person-1')
