@@ -1,5 +1,5 @@
 ---
-title: Reference
+title: Configuration reference
 description: Every key of config/oidc.php, its default and the rule it is checked against
 weight: 21
 ---

@@ -16,6 +16,7 @@ and carries:
 
 The message repeats all three, so a log line alone is enough:
 
+<!-- example: error-message -->
 ```text
 [oidc_discovery_issuer_mismatch] The discovery document of connection "main" names the issuer "https://login.example.com/", but the connection pins "https://login.example.com". They must be equal, character for character (RFC 8414 3.3). Fix: If "https://login.example.com/" is the provider you mean, set oidc.connections.main.issuer to it exactly, trailing slash included. Otherwise check discovery_url.
 ```

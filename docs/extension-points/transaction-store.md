@@ -11,6 +11,7 @@ Between `start()` and `callback()`, a login waits as an
 verifier, the redirect URI, the `max_age` it asked for and when it started.
 It is kept by `Cbox\Oidc\Contracts\TransactionStore`:
 
+<!-- signature: Cbox\Oidc\Contracts\TransactionStore -->
 ```php
 public function put(AuthorizationTransaction $transaction): void;
 
@@ -28,6 +29,7 @@ callback routes therefore need the `web` middleware group.
 Bind your own implementation in a service provider; the package binds the
 session store only when nothing else is bound:
 
+<!-- example: transaction-store-binding -->
 ```php
 use Cbox\Oidc\Contracts\TransactionStore;
 

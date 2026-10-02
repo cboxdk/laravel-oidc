@@ -120,6 +120,20 @@ the class of report we most want.
 - **Tokens in logs.** A refused logout token is logged with its code and
   rule, never the token; the 400 answer names only the code.
 
+## Testing and diagnostics
+
+- **The fake is for tests only.** `Oidc::fake()` lives in
+  `Cbox\Oidc\Testing` and reports through PHPUnit. Its ID tokens are
+  unsecured JWTs (`alg: none`) that the package's verifier refuses as
+  malformed, so a token the fake made can never pass a real check. It
+  replaces the client only for the application instance of the test that
+  called it.
+- **`oidc:check` calls the provider like a login does.** The discovery
+  document and key set are fetched through the same client and SSRF guard and
+  checked by the same rules; the cache is not touched. The output names the issuer,
+  client id, endpoints and key ids, never the client secret or a private key,
+  and provider text is printed as text, not as console markup.
+
 ## Honest scope
 
 - The package is a relying party. It issues no tokens.
@@ -151,3 +165,5 @@ the class of report we most want.
   (`session.encrypt`) or the token itself.
 - The SSRF guard is defence in depth; a network egress allow-list is the only
   complete control.
+- `oidc:check` does not try the client secret or private key, and cannot see
+  the redirect URIs registered at the provider; both show at the first login.

@@ -6,6 +6,7 @@ weight: 15
 
 # Core concepts
 
+- **[The Oidc facade](the-oidc-facade.md)** — Every call of the Oidc facade and the OidcClient contract, and how to use several connections
 - **[Discovery and keys](discovery-and-keys.md)** — How a connection's discovery document and signing keys are fetched, checked, cached and rotated
 - **[The login flow](login-flow.md)** — Start a login, handle the callback, and what each step checks
 - **[ID token verification](id-token-verification.md)** — Every rule an ID token must pass, tenant pinning for Google and Entra, and the verified claims

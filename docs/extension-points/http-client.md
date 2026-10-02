@@ -8,10 +8,11 @@ weight: 26
 
 ## The HTTP client
 
-Every call the package makes to a provider (discovery, keys, the token
-endpoint, and in later versions userinfo and revocation) goes through one contract,
+Every call the package makes to a provider (discovery, keys, the token,
+userinfo and revocation endpoints) goes through one contract,
 `Cbox\Oidc\Contracts\HttpClient`:
 
+<!-- signature: Cbox\Oidc\Contracts\HttpClient -->
 ```php
 public function send(HttpRequest $request): HttpResponse;
 ```
@@ -67,6 +68,7 @@ final readonly class LoggedHttpClient implements HttpClient
 }
 ```
 
+<!-- example: http-client-binding -->
 ```php
 // app/Providers/AppServiceProvider.php, in register()
 $this->app->singleton(\Cbox\Oidc\Contracts\HttpClient::class, LoggedHttpClient::class);

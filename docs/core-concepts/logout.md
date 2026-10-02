@@ -10,9 +10,10 @@ Three things can end a session that started with OpenID Connect:
 
 - **RP-initiated logout**: the person logs out in your application, and you
   send their browser to the provider so their session there ends too
-  (`Cbox\Oidc\Logout\LogoutFlow`).
+  (`Oidc::logout()`, or the service `Cbox\Oidc\Logout\LogoutFlow`).
 - **Token revocation**: you tell the provider to forget the refresh token
-  (`Cbox\Oidc\Tokens\TokenRevocation`, RFC 7009).
+  (`Oidc::revoke()`, or the service `Cbox\Oidc\Tokens\TokenRevocation`,
+  RFC 7009).
 - **Back-channel logout**: the provider tells you, server to server, that the
   person's session there ended, and you end yours (OpenID Connect Back-Channel
   Logout 1.0).
@@ -27,15 +28,15 @@ End your own session first, then revoke and redirect:
 ```php
 <?php
 
+use Cbox\Oidc\Contracts\OidcClient;
+use Cbox\Oidc\Exceptions\EndpointNotSupported;
 use Cbox\Oidc\Exceptions\OidcException;
-use Cbox\Oidc\Logout\LogoutFlow;
 use Cbox\Oidc\Logout\LogoutOptions;
-use Cbox\Oidc\Tokens\TokenRevocation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware('web')->post('/logout', function (Request $request, LogoutFlow $logout, TokenRevocation $revocation): RedirectResponse {
+Route::middleware('web')->post('/logout', function (Request $request, OidcClient $oidc): RedirectResponse {
     $idToken = $request->session()->get('oidc.id_token');
     $refreshToken = $request->session()->get('oidc.refresh_token');
 
@@ -43,9 +44,11 @@ Route::middleware('web')->post('/logout', function (Request $request, LogoutFlow
     $request->session()->invalidate();
     $request->session()->regenerateToken();
 
-    if (is_string($refreshToken) && $revocation->supported()) {
+    if (is_string($refreshToken)) {
         try {
-            $revocation->revoke($refreshToken);
+            $oidc->revoke($refreshToken);
+        } catch (EndpointNotSupported) {
+            // The provider has no revocation endpoint; nothing to revoke.
         } catch (OidcException $exception) {
             // The local session is over either way.
             report($exception);
@@ -53,13 +56,16 @@ Route::middleware('web')->post('/logout', function (Request $request, LogoutFlow
     }
 
     // To the provider's end_session_endpoint, or home when it has none.
-    return $logout->redirect(options: new LogoutOptions(idTokenHint: is_string($idToken) ? $idToken : null), fallback: '/');
+    return $oidc->logout(options: new LogoutOptions(idTokenHint: is_string($idToken) ? $idToken : null), fallback: '/');
 });
 ```
 
 ### RP-initiated logout
 
-`LogoutFlow::start($connection, $options)` returns a `LogoutRequest`, the URL
+`Oidc::logout($connection, $options, $fallback)` returns the redirect to the
+provider's `end_session_endpoint`, or to `$fallback` when the provider has
+none; Google has none. Underneath, `LogoutFlow::start($connection, $options)`
+returns a `LogoutRequest`, the URL
 of the provider's `end_session_endpoint` (return it from a route to
 redirect). `redirect($connection, $options, $fallback)` returns the redirect
 directly, to `$fallback` when the provider has no endpoint; Google has none.
@@ -82,7 +88,8 @@ redirect check (https, not a private address).
 
 ### Revocation
 
-`TokenRevocation::revoke($token, $hint, $connection)` posts the token to the
+`Oidc::revoke($token, $hint, $connection)`, like
+`TokenRevocation::revoke()` underneath, posts the token to the
 provider's `revocation_endpoint` with the connection's client authentication.
 `$hint` is a `TokenTypeHint` (`RefreshToken` by default, `AccessToken`, or
 null for none). Revoking the refresh token usually ends the grant, the
@@ -93,8 +100,9 @@ access tokens issued from it included.
   whose `error()` is the code, such as `unsupported_token_type`.
 - 503 and other temporary failures fail with `ProviderUnavailable`; retry
   later, for example from a queued job.
-- Without a `revocation_endpoint` it fails with `oidc_endpoint_not_supported`;
-  ask `supported($connection)` first.
+- Without a `revocation_endpoint` it fails with `EndpointNotSupported`
+  (`oidc_endpoint_not_supported`), as the route above catches;
+  `TokenRevocation::supported($connection)` asks first.
 
 ## Back-channel logout
 

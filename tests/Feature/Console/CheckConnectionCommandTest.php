@@ -61,13 +61,22 @@ it('prints JSON', function (): void {
         ]);
 });
 
-it('fetches the documents afresh instead of trusting the cache', function (): void {
-    resolve(MetadataRepository::class)->for(resolve(OidcConfig::class)->connection());
+it('fetches the documents afresh and leaves the cache alone', function (): void {
+    $connection = resolve(OidcConfig::class)->connection();
+    resolve(MetadataRepository::class)->for($connection);
 
     $this->artisan('oidc:check')->assertExitCode(0);
 
     expect($this->provider->discoveryRequests)->toBe(2)
         ->and($this->provider->jwksRequests)->toBe(1);
+
+    // A provider that is down during a check: the cached copy still serves logins.
+    $this->provider->discoveryStatus = 503;
+
+    $this->artisan('oidc:check')->expectsOutputToContain('[oidc_provider_unavailable]')->assertExitCode(1);
+
+    expect(resolve(MetadataRepository::class)->for($connection)->issuer)->toBe(FakeProvider::ISSUER)
+        ->and($this->provider->discoveryRequests)->toBe(3);
 });
 
 it('fails with the error code and fix of a discovery document for another issuer', function (): void {

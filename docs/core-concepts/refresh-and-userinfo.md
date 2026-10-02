@@ -7,12 +7,12 @@ weight: 19
 # Refresh and userinfo
 
 A login gives you an access token that expires (often after an hour) and,
-when you ask for it, a refresh token that renews it. Two services work with
-them:
+when you ask for it, a refresh token that renews it:
 
-- `Cbox\Oidc\Tokens\TokenRefresher` renews the tokens of a login;
-- `Cbox\Oidc\UserInfo\UserInfoEndpoint` reads the person's claims from the
-  provider's userinfo endpoint with an access token.
+- `Oidc::refresh()` renews the tokens of a login (the service
+  `Cbox\Oidc\Tokens\TokenRefresher` underneath);
+- `Oidc::userInfo()` reads the person's claims from the provider's userinfo
+  endpoint with an access token (`Cbox\Oidc\UserInfo\UserInfoEndpoint`).
 
 ## Getting a refresh token
 
@@ -37,12 +37,11 @@ keep it in the session, turn on `session.encrypt`, or encrypt it yourself with
 <?php
 
 use Cbox\Oidc\Exceptions\TokenRequestRejected;
-use Cbox\Oidc\Tokens\TokenRefresher;
-use Cbox\Oidc\UserInfo\UserInfoEndpoint;
+use Cbox\Oidc\Facades\Oidc;
 
 // $claims and $refreshToken were kept from the login's CallbackResult.
 try {
-    $renewed = app(TokenRefresher::class)->refresh($claims, $refreshToken);
+    $renewed = Oidc::refresh($claims, $refreshToken);
 } catch (TokenRequestRejected $exception) {
     if ($exception->refreshTokenInvalid()) {
         // The provider ended the grant: revoked, expired or used up.
@@ -57,12 +56,12 @@ try {
 $claims = $renewed->claims;
 $refreshToken = $renewed->refreshToken;
 
-$info = app(UserInfoEndpoint::class)->fetch($claims, $renewed->tokens->accessToken);
+$info = Oidc::userInfo($claims, $renewed->tokens->accessToken);
 
 return [$claims->subject, $renewed->rotated, $info->email()];
 ```
 
-`refresh($claims, $refreshToken, $scopes)` sends the refresh token to the
+`Oidc::refresh($claims, $refreshToken, $scopes)` sends the refresh token to the
 token endpoint of the connection `$claims` came from, with the connection's
 client authentication, and returns a `RefreshResult`:
 
@@ -104,10 +103,11 @@ groups of the original claims until you call userinfo again.
 
 ## Userinfo
 
-`fetch($claims, $accessToken)` calls the provider's `userinfo_endpoint` with
-the access token as a Bearer token and returns a `UserInfo`: `subject`,
-`groups` and the claims, read with `claim()`, `string()`, `email()`,
-`emailVerified()`, `name()`, `has()` and `all()`, as on `VerifiedClaims`.
+`Oidc::userInfo($claims, $accessToken)` (`UserInfoEndpoint::fetch()`) calls
+the provider's `userinfo_endpoint` with the access token as a Bearer token
+and returns a `UserInfo`: `subject`, `groups` and the claims, read with
+`claim()`, `string()`, `email()`, `emailVerified()`, `name()`, `has()` and
+`all()`, as on `VerifiedClaims`.
 
 - The response's `sub` must be the ID token's subject, or it fails with
   `oidc_userinfo_subject_mismatch` (OpenID Connect Core 5.3.4): the claims

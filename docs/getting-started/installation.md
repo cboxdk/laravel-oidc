@@ -26,4 +26,8 @@ The package parses the configuration on first use, not at boot, so an
 application that installed it but has not configured it yet keeps booting. The
 first OIDC call then names the missing key.
 
-Next: the [configuration reference](../configuration/reference.md).
+Laravel also registers the `Oidc` facade alias and the `oidc:check` command.
+
+Next: the [configuration reference](../configuration/reference.md), the page
+of [your provider](../providers/_index.md), and
+[checking a connection](checking-a-connection.md).

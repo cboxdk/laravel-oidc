@@ -57,6 +57,7 @@ account has no `hd` and is refused with `oidc_tenant_claim_missing`. Domains
 are compared without case; a subdomain is another domain. The `hd` request
 parameter is only a hint to Google's account chooser and is never trusted.
 
+<!-- example: config-fragment -->
 ```php
 'tenant' => ['claim' => 'hd', 'allowed' => ['example.com', 'example.org']],
 ```
@@ -69,10 +70,11 @@ as well.
 with the `organizations` (or `common`) discovery document, and list the
 tenants:
 
+<!-- example: config-fragment -->
 ```php
 'issuer' => 'https://login.microsoftonline.com/{tenantid}/v2.0',
 'discovery_url' => 'https://login.microsoftonline.com/organizations/v2.0/.well-known/openid-configuration',
-'tenant' => ['claim' => 'tid', 'allowed' => ['<tenant id>', '<tenant id>']],
+'tenant' => ['claim' => 'tid', 'allowed' => ['11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222']],
 ```
 
 The token's `tid` must be a GUID; the expected issuer is the template with

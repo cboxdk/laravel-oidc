@@ -1,17 +1,41 @@
 # Cbox OIDC
 
-An OpenID Connect relying party for Laravel. It signs people in through any
-OpenID provider (Microsoft Entra ID, Google Workspace, Okta, Keycloak, Auth0,
-Cbox ID) with the authorization code flow, PKCE and full ID token
-verification, and hands your application a typed, verified result.
+Sign people in to a Laravel application through any OpenID provider:
+Microsoft Entra ID, Google Workspace, Okta, Keycloak, Auth0, Cbox ID and
+others. The authorization code flow with PKCE, full ID token verification,
+issuer and tenant pinning, refresh, logout and back-channel logout, with
+every call to the provider behind an SSRF guard.
 
-> **Status: in development, not released.** Version 0.1 is being built in
-> slices. Today the package has its typed, multi-connection configuration,
-> discovery and signing-key handling behind the SSRF guard, the
-> authorization code flow through full ID token verification with issuer and
-> tenant pinning, refresh, userinfo, RP-initiated logout, revocation and
-> back-channel logout. The facade and the testing fake land in the next
-> slice. The [changelog](CHANGELOG.md) lists what exists.
+<!-- example: setup-routes -->
+```php
+<?php
+
+use App\Models\User;
+use Cbox\Oidc\Facades\Oidc;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/login', fn () => Oidc::redirect())->name('login');
+
+Route::get('/oidc/callback', function () {
+    $claims = Oidc::callback()->claims;
+
+    Auth::login(User::updateOrCreate(
+        ['oidc_issuer' => $claims->issuer, 'oidc_subject' => $claims->subject],
+        ['name' => $claims->name() ?? $claims->subject, 'email' => $claims->email()],
+    ));
+    session()->regenerate();
+
+    return redirect()->intended('/');
+});
+```
+
+`$claims` are verified: signature, issuer, audience, nonce, times and tenant.
+Identify the person by `$claims->issuer` and `$claims->subject` together.
+
+> **Status: in development, not released.** Version 0.1 is complete in scope
+> and being reviewed before its first release. The [changelog](CHANGELOG.md)
+> lists what it holds.
 
 ## Why
 
@@ -20,38 +44,31 @@ be checked against a pinned issuer, the right audience, a nonce bound to the
 browser's session, an algorithm allow-list, and keys that rotate. The calls to
 the provider are outbound HTTP to URLs that come from a document the provider
 serves, which is an SSRF surface. This package does those checks in one place,
-with the cryptography left to an established library.
+with the cryptography left to an established library,
+[`web-token/jwt-library`](https://github.com/web-token/jwt-library), and every
+outbound call guarded by
+[`cboxdk/laravel-ssrf`](https://github.com/cboxdk/laravel-ssrf).
 
-## Scope of 0.1
+## What it does
 
-- Several named connections (providers or tenants) in `config/oidc.php`,
-  checked into typed objects. Done.
-- Discovery with an exact issuer match (RFC 8414) and cached metadata. Done.
-- The provider's signing keys (JWKS): cached with the provider's lifetime,
-  refetched once on an unknown `kid` with a cross-process cooldown, and each
-  key checked for type, curve, size, use and alg before it may verify. Done.
-- Authorization code flow with PKCE (S256), with state and nonce in the
-  session, the RFC 9207 `iss` check, and the code exchange with
-  `client_secret_basic`, `client_secret_post`, `private_key_jwt` or a public
-  client. Done.
-- ID token verification: signature through the provider's JWKS (refetched once,
-  rate-limited, on an unknown `kid`), a per-connection algorithm allow-list,
-  `iss`, `aud`, `azp`, `exp`, `nbf`, `iat` with leeway, `nonce`, `at_hash`,
-  `auth_time` and `max_age`, and a typed `VerifiedClaims` result. Done.
-- Issuer and tenant pinning: Microsoft Entra multi-tenant (`{tenantid}` checked
-  against `tid`, with per-tenant allow-lists) and the Google Workspace `hd`
-  claim. Done.
-- Refresh tokens (the new ID token checked against the login it renews),
-  userinfo (with the `sub` match), RP-initiated logout and token revocation.
-  Done.
-- A back-channel logout receiver that verifies the logout token and dispatches a
-  Laravel event, with `jti` replay protection. Done.
-- A testing fake for your application's tests.
-
-Cryptography (JWK and JWKS parsing, signature verification, claim checks) comes
-from [`web-token/jwt-library`](https://github.com/web-token/jwt-library). The
-package never hand-writes it. Every outbound call goes through an injectable
-client guarded by [`cboxdk/laravel-ssrf`](https://github.com/cboxdk/laravel-ssrf).
+- Several named connections in `config/oidc.php`, checked into typed objects:
+  a wrong value fails at once with the key and the fix.
+- Discovery with an exact issuer match (RFC 8414), and the provider's keys
+  cached with their lifetime and refetched once, rate-limited, on an unknown
+  `kid`.
+- The authorization code flow with PKCE S256, state and nonce kept in the
+  session, and the RFC 9207 `iss` check.
+- ID token verification: signature through the provider's keys, a
+  per-connection algorithm allow-list, `iss`, `aud`, `azp`, `exp`, `nbf`,
+  `iat` with leeway, `nonce`, `at_hash`, `auth_time` and `max_age`.
+- Tenant pinning: Microsoft Entra multi-tenant (`{tenantid}` checked against
+  `tid`, with an allow-list) and the Google Workspace `hd` claim.
+- Refresh tokens, userinfo with the `sub` match, RP-initiated logout, token
+  revocation, and a back-channel logout receiver with `jti` replay protection
+  that dispatches a Laravel event.
+- `Oidc::fake()` for your tests, and `php artisan oidc:check` to see whether
+  a connection works and why not.
+- Exceptions with a stable code and a one-line fix.
 
 ## Install
 
@@ -60,7 +77,7 @@ composer require cboxdk/laravel-oidc
 php artisan vendor:publish --tag=oidc-config
 ```
 
-Then set the connection in your environment:
+Then set the connection in your environment and check it:
 
 ```dotenv
 OIDC_ISSUER=https://login.example.com
@@ -69,98 +86,46 @@ OIDC_CLIENT_SECRET=your-client-secret
 OIDC_REDIRECT_URI=https://app.example.com/oidc/callback
 ```
 
-## Configuration
-
-`config/oidc.php` holds one entry per connection under `connections`, and the
-`default` connection name. Each value is checked the first time the package
-needs it; a wrong value throws `InvalidConfiguration` with a stable code, the
-full key and the fix:
-
-```text
-[oidc_config_invalid] oidc.connections.main.issuer must be an absolute https URL. Fix: Set oidc.connections.main.issuer to a full URL starting with https://.
+```bash
+php artisan oidc:check
 ```
 
-See the [configuration reference](docs/configuration/reference.md) for every key.
+The [quickstart](docs/quickstart.md) walks through the users table and the
+routes above; the [provider pages](docs/providers/_index.md) have a tested
+configuration for each common provider.
 
-## Usage
+## Testing your application
 
-Give each connection a login route and its own callback route:
-
+<!-- example: setup-test -->
 ```php
-use Cbox\Oidc\Flow\AuthorizationFlow;
-use Illuminate\Http\Request;
+<?php
 
-Route::middleware('web')->group(function () {
-    Route::get('/oidc/{connection}/login', fn (AuthorizationFlow $oidc, string $connection) => $oidc->start($connection));
+use App\Models\User;
+use Cbox\Oidc\Facades\Oidc;
 
-    Route::get('/oidc/{connection}/callback', function (Request $request, AuthorizationFlow $oidc, string $connection) {
-        $claims = $oidc->callback($request, $connection)->claims;
+it('signs a person in through the provider', function () {
+    Oidc::fake()->signIn('user-1', ['email' => 'ada@example.com', 'name' => 'Ada Lovelace']);
 
-        // Verified: find or create your user by issuer and subject.
-        $user = User::firstOrCreate(['oidc_issuer' => $claims->issuer, 'oidc_subject' => $claims->subject], ['email' => $claims->email()]);
-        Auth::login($user);
-        $request->session()->regenerate();
+    $this->get('/login')->assertRedirect();
+    $this->get('/oidc/callback')->assertRedirect('/');
 
-        return redirect('/');
-    });
+    $this->assertAuthenticatedAs(User::where('oidc_subject', 'user-1')->sole());
 });
 ```
 
-`start()` sends the browser to the provider with a fresh state, nonce and PKCE
-challenge. `callback()` checks the state, the `iss` parameter and any error,
-exchanges the code and verifies the ID token. `$result->claims` holds the
-issuer, subject, `auth_time`, `amr`, `acr`, tenant, groups and every other
-claim. See [the login flow](docs/core-concepts/login-flow.md) for options such
-as `prompt`, `max_age` and `login_hint` and the full example with error
-handling, and [ID token verification](docs/core-concepts/id-token-verification.md)
-for every rule and the Google and Entra tenant policies.
-
-### Refresh and userinfo
-
-```php
-use Cbox\Oidc\Tokens\TokenRefresher;
-use Cbox\Oidc\UserInfo\UserInfoEndpoint;
-
-$renewed = app(TokenRefresher::class)->refresh($claims, $refreshToken);
-// Keep $renewed->refreshToken and $renewed->claims from now on.
-
-$info = app(UserInfoEndpoint::class)->fetch($renewed->claims, $renewed->tokens->accessToken);
-```
-
-A refreshed ID token must name the same issuer, subject and tenant as the
-login it renews. See [refresh and userinfo](docs/core-concepts/refresh-and-userinfo.md).
-
-### Logout
-
-```php
-use Cbox\Oidc\Logout\LogoutFlow;
-use Cbox\Oidc\Logout\LogoutOptions;
-
-// After ending your own session: log out at the provider too, or go home
-// when it has no end_session_endpoint.
-return app(LogoutFlow::class)->redirect(options: new LogoutOptions(idTokenHint: $idToken), fallback: '/');
-```
-
-For back-channel logout, register the receiver and listen for its event:
-
-```php
-use Cbox\Oidc\Events\BackChannelLogoutReceived;
-
-Route::oidcBackChannelLogout('oidc/{connection}/backchannel-logout'); // routes/api.php
-
-Event::listen(function (BackChannelLogoutReceived $event) {
-    // End your sessions of $event->token->issuer with $event->token->sessionId,
-    // or of $event->token->subject when there is no sid.
-});
-```
-
-The logout token is verified like an ID token, must carry the back-channel
-logout event and no nonce, and each `jti` is accepted once. See
-[logout](docs/core-concepts/logout.md), which also covers token revocation.
+`Oidc::fake()` queues what the provider answers (`signIn()`, `denySignIn()`,
+`failSignIn()`), records what your code asked for, and asserts it. See
+[testing](docs/getting-started/testing.md).
 
 ## Errors
 
-Every exception extends `OidcException` and carries a stable code and a fix.
+Every exception extends `OidcException` and carries a stable code and a fix:
+
+<!-- example: error-message -->
+```text
+[oidc_discovery_issuer_mismatch] The discovery document of connection "main" names the issuer "https://login.example.com/", but the connection pins "https://login.example.com". They must be equal, character for character (RFC 8414 3.3). Fix: If "https://login.example.com/" is the provider you mean, set oidc.connections.main.issuer to it exactly, trailing slash included. Otherwise check discovery_url.
+```
+
 See [errors](docs/core-concepts/errors.md) for the list.
 
 ## Honest scope
@@ -173,7 +138,7 @@ See [errors](docs/core-concepts/errors.md) for the list.
   token and dispatches an event; ending the sessions it names is up to your
   application.
 - The SSRF guard is defence in depth: a network egress allow-list is the only
-  complete control. See the guard's own documentation.
+  complete control.
 - Provider calls are https only and never follow redirects, so a provider
   running on a private network or on `localhost` is refused unless you change
   `config/ssrf.php` on purpose.
@@ -182,14 +147,15 @@ See [errors](docs/core-concepts/errors.md) for the list.
   compromised key, drop the cache yourself; see
   [discovery and keys](docs/core-concepts/discovery-and-keys.md#caching).
 
-## Testing
+## Testing the package
 
 ```bash
 composer qa
 ```
 
 runs Pint, Rector, PHPStan at level max, the Pest suites, the license check and
-`composer audit`.
+`composer audit`. Every code sample in the documentation and this README is run
+by the test suite.
 
 ## Documentation
 
@@ -197,7 +163,11 @@ runs Pint, Rector, PHPStan at level max, the Pest suites, the license check and
 - [Quickstart](docs/quickstart.md)
 - [Requirements](docs/requirements.md)
 - [Installation](docs/getting-started/installation.md)
+- [Testing](docs/getting-started/testing.md)
+- [Checking a connection](docs/getting-started/checking-a-connection.md)
 - [Configuration reference](docs/configuration/reference.md)
+- [Providers](docs/providers/_index.md): [Google](docs/providers/google.md), [Microsoft Entra ID](docs/providers/microsoft-entra.md), [Okta](docs/providers/okta.md), [Keycloak](docs/providers/keycloak.md), [Auth0](docs/providers/auth0.md), [Cbox ID](docs/providers/cbox-id.md)
+- [The Oidc facade](docs/core-concepts/the-oidc-facade.md)
 - [Discovery and keys](docs/core-concepts/discovery-and-keys.md)
 - [The login flow](docs/core-concepts/login-flow.md)
 - [ID token verification](docs/core-concepts/id-token-verification.md)
@@ -205,6 +175,7 @@ runs Pint, Rector, PHPStan at level max, the Pest suites, the license check and
 - [Logout](docs/core-concepts/logout.md)
 - [Errors](docs/core-concepts/errors.md)
 - [HTTP client and clock](docs/extension-points/http-client.md)
+- [Transaction store](docs/extension-points/transaction-store.md)
 - [Security](docs/security/_index.md)
 
 ## License

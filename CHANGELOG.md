@@ -167,13 +167,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `assertSignedIn`, `assertNoPendingSignIns`, `assertRefreshed`,
   `assertLoggedOut`, `assertRevoked` and their negations.
 - **`php artisan oidc:check`.** Fetches a connection's discovery document and
-  key set afresh, through the same client and SSRF guard as a login, and
+  key set afresh, through the same client and SSRF guard as a login, without
+  touching the cache, and
   prints what works and what does not: the configuration, the issuer match,
   the common algorithms, the keys that may verify ID tokens, the userinfo,
   logout and revocation endpoints, back-channel logout and the RFC 9207 `iss`
   parameter. Each problem carries its error code and fix; `--all` checks every
   connection, `--json` prints a machine-readable report, and the exit code is
   1 when a check fails. The same checks are `Diagnostics\ConnectionDiagnostics`.
+- **Documentation for every provider and for testing.** A quickstart with the
+  few lines of setup, a page per provider (Google, Microsoft Entra ID with one
+  and with several tenants, Okta, Keycloak, Auth0, Cbox ID), testing with
+  `Oidc::fake()`, checking a connection, and the facade. Every PHP sample of
+  the docs and the README is run by the test suite: the provider
+  configurations sign in against an in-process provider shaped like each
+  provider, the documented tests run against the documented routes, and a
+  docs audit fails on a sample no test runs, a broken link or a page without
+  its frontmatter.
 
 ### Fixed
 

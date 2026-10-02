@@ -8,12 +8,14 @@ use Cbox\Oidc\Config\ConnectionConfig;
 use Cbox\Oidc\Config\GroupsSource;
 use Cbox\Oidc\Config\OidcConfig;
 use Cbox\Oidc\Config\TenantPolicy;
-use Cbox\Oidc\Discovery\MetadataRepository;
+use Cbox\Oidc\Contracts\HttpClient;
 use Cbox\Oidc\Discovery\ProviderMetadata;
 use Cbox\Oidc\Exceptions\ErrorCode;
 use Cbox\Oidc\Exceptions\OidcException;
+use Cbox\Oidc\Http\HttpRequest;
 use Cbox\Oidc\Keys\KeySelector;
-use Cbox\Oidc\Keys\KeySetRepository;
+use Cbox\Oidc\Keys\KeySet;
+use Cbox\Oidc\Support\ProviderDocument;
 use Cbox\Oidc\Tokens\SigningAlgorithm;
 use Illuminate\Contracts\Container\Container;
 use Jose\Component\Core\JWK;
@@ -24,9 +26,10 @@ use Jose\Component\Core\JWK;
  * package's calls need. What `php artisan oidc:check` prints.
  *
  * The discovery document and the key set are fetched afresh, through the
- * same client, SSRF guard and checks as a login, and the fresh copies replace
- * the cached ones. The client secret is not tried: the token endpoint is only
- * called with a code, so a wrong secret shows at the first login
+ * same client, SSRF guard and checks as a login, and the cache is left as it
+ * is: a provider that is down during a check keeps its cached copies for the
+ * logins that need them. The client secret is not tried: the token endpoint
+ * is only called with a code, so a wrong secret shows at the first login
  * (oidc_token_request_rejected, invalid_client).
  */
 final readonly class ConnectionDiagnostics
@@ -60,9 +63,8 @@ final readonly class ConnectionDiagnostics
         $findings = $this->configuration($config);
 
         try {
-            $repository = $this->container->make(MetadataRepository::class);
-            $repository->forget($config);
-            $metadata = $repository->for($config);
+            $response = $this->container->make(HttpClient::class)->send(HttpRequest::get($config->discoveryUrl, ['Accept' => 'application/json']));
+            $metadata = ProviderMetadata::fromDocument(ProviderDocument::fromResponse($response, $config->discoveryUrl, 'discovery document'), $config);
         } catch (OidcException $exception) {
             return new Diagnosis($config->name, [...$findings, Finding::failed('discovery', $exception)]);
         }
@@ -109,9 +111,8 @@ final readonly class ConnectionDiagnostics
     private function keys(ConnectionConfig $config, ProviderMetadata $metadata): array
     {
         try {
-            $repository = $this->container->make(KeySetRepository::class);
-            $repository->forget($config, $metadata);
-            $keys = $repository->for($config, $metadata)->keys;
+            $response = $this->container->make(HttpClient::class)->send(HttpRequest::get($metadata->jwksUri, ['Accept' => 'application/jwk-set+json, application/json']));
+            $keys = KeySet::fromDocument(ProviderDocument::fromResponse($response, $metadata->jwksUri, 'key set'), $config->name, $metadata->jwksUri)->keys;
         } catch (OidcException $exception) {
             return [Finding::failed('keys', $exception)];
         }

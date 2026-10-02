@@ -7,15 +7,22 @@ weight: 17
 # The login flow
 
 The package runs the authorization code flow with PKCE (OpenID Connect Core
-3.1) through one service, `Cbox\Oidc\Flow\AuthorizationFlow`:
+3.1). Through the `Oidc` facade, or the `Cbox\Oidc\Contracts\OidcClient`
+contract behind it:
 
 - `start($connection, $options)` makes a fresh state, nonce and PKCE verifier,
   keeps them server-side, and returns an `AuthorizationRequest`: the URL to
   send the browser to. Return it from a route and Laravel answers with the
   redirect. `redirect()` returns the `RedirectResponse` directly.
-- `callback($request, $connection)` checks the browser's return, exchanges
+- `callback($connection, $request)` checks the browser's return, exchanges
   the code for tokens and verifies the ID token. It returns a `CallbackResult`
   whose `claims` are the verified claims: sign the person in from those.
+  Without `$request`, it reads the current request.
+
+Underneath is the service `Cbox\Oidc\Flow\AuthorizationFlow`, with the same
+calls (`callback()` takes the request first). Code that uses the facade or
+the contract is replaced by `Oidc::fake()` in tests; code that uses the
+service is not.
 
 ## Routes
 
@@ -29,10 +36,10 @@ the session.
 ```php
 <?php
 
+use Cbox\Oidc\Contracts\OidcClient;
 use Cbox\Oidc\Exceptions\AuthorizationDenied;
 use Cbox\Oidc\Exceptions\OidcException;
 use Cbox\Oidc\Exceptions\TenantRejected;
-use Cbox\Oidc\Flow\AuthorizationFlow;
 use Cbox\Oidc\Flow\AuthorizationRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -42,12 +49,12 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('web')->group(function (): void {
     $connections = array_keys((array) config('oidc.connections'));
 
-    Route::get('/oidc/{connection}/login', fn (AuthorizationFlow $oidc, string $connection): AuthorizationRequest => $oidc->start($connection))
+    Route::get('/oidc/{connection}/login', fn (OidcClient $oidc, string $connection): AuthorizationRequest => $oidc->start($connection))
         ->whereIn('connection', $connections);
 
-    Route::get('/oidc/{connection}/callback', function (Request $request, AuthorizationFlow $oidc, string $connection): RedirectResponse|JsonResponse|AuthorizationRequest {
+    Route::get('/oidc/{connection}/callback', function (Request $request, OidcClient $oidc, string $connection): RedirectResponse|JsonResponse|AuthorizationRequest {
         try {
-            $result = $oidc->callback($request, $connection);
+            $result = $oidc->callback($connection, $request);
         } catch (AuthorizationDenied $denied) {
             // A silent login (prompt=none) that needs the person: ask them.
             return $denied->interactionRequired()
@@ -80,11 +87,15 @@ Route::middleware('web')->group(function (): void {
 
 `AuthorizationOptions` adds to what the connection configures:
 
+<!-- example: authorization-options -->
 ```php
+<?php
+
+use Cbox\Oidc\Facades\Oidc;
 use Cbox\Oidc\Flow\AuthorizationOptions;
 use Cbox\Oidc\Flow\Prompt;
 
-$oidc->start('entra', new AuthorizationOptions(
+return Oidc::redirect('main', new AuthorizationOptions(
     prompt: Prompt::Login,          // or [Prompt::Login, Prompt::Consent]
     maxAge: 0,                      // re-authenticate now; auth_time becomes required
     loginHint: 'ada@example.com',
@@ -155,6 +166,7 @@ does not carry a live state is refused without a call to the provider.
 
 For `private_key_jwt`, the key and its settings live under `client_assertion`:
 
+<!-- example: config-fragment -->
 ```php
 'client_auth' => 'private_key_jwt',
 'client_assertion' => [

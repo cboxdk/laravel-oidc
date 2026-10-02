@@ -100,6 +100,7 @@ Carbon, so `$this->travel()` in your tests moves it together with the cache.
 To drop a cached document at once, for example when a provider withdraws a
 compromised key:
 
+<!-- example: forget-cache -->
 ```php
 use Cbox\Oidc\Config\OidcConfig;
 use Cbox\Oidc\Discovery\MetadataRepository;
