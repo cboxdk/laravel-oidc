@@ -1,0 +1,29 @@
+---
+title: Installation
+description: Install the package, publish the configuration and set the environment
+weight: 11
+---
+
+# Installation
+
+```bash
+composer require cboxdk/laravel-oidc
+```
+
+Laravel discovers `Cbox\Oidc\OidcServiceProvider` on its own. Publish the
+configuration to change it:
+
+```bash
+php artisan vendor:publish --tag=oidc-config
+```
+
+This writes `config/oidc.php`. Its connection `main` reads the environment
+variables `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`,
+`OIDC_REDIRECT_URI` and, optionally, `OIDC_DISCOVERY_URL` and
+`OIDC_POST_LOGOUT_REDIRECT_URI`. `OIDC_CONNECTION` picks the default connection.
+
+The package parses the configuration on first use, not at boot, so an
+application that installed it but has not configured it yet keeps booting. The
+first OIDC call then names the missing key.
+
+Next: the [configuration reference](../configuration/reference.md).
