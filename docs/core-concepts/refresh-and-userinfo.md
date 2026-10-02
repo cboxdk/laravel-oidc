@@ -105,9 +105,10 @@ groups of the original claims until you call userinfo again.
 
 `Oidc::userInfo($claims, $accessToken)` (`UserInfoEndpoint::fetch()`) calls
 the provider's `userinfo_endpoint` with the access token as a Bearer token
-and returns a `UserInfo`: `subject`, `groups` and the claims, read with
-`claim()`, `string()`, `email()`, `emailVerified()`, `name()`, `has()` and
-`all()`, as on `VerifiedClaims`.
+and returns a `UserInfo`: `subject`, `groups` and the claims, read with the
+typed readers (`string()`, `int()`, `bool()`, `stringList()`, `time()`),
+`email()`, `emailVerified()`, `name()`, and untyped with `claim()`, `has()`
+and `all()`, as on `VerifiedClaims`.
 
 - The response's `sub` must be the ID token's subject, or it fails with
   `oidc_userinfo_subject_mismatch` (OpenID Connect Core 5.3.4): the claims

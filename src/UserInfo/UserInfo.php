@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cbox\Oidc\UserInfo;
 
-use Cbox\Oidc\Tokens\Concerns\ReadsClaims;
+use Cbox\Oidc\Tokens\Concerns\ReadsPersonClaims;
 
 /**
  * The claims the userinfo endpoint returned for the person (OpenID Connect
@@ -17,7 +17,7 @@ use Cbox\Oidc\Tokens\Concerns\ReadsClaims;
  */
 final readonly class UserInfo
 {
-    use ReadsClaims;
+    use ReadsPersonClaims;
 
     /**
      * @param  list<string>|null  $groups  the groups claim of the connection, when its groups.source is userinfo; null otherwise

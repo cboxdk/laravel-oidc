@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cbox\Oidc\Tokens;
 
-use Cbox\Oidc\Tokens\Concerns\ReadsClaims;
+use Cbox\Oidc\Tokens\Concerns\ReadsPersonClaims;
 use DateTimeImmutable;
 
 /**
@@ -18,7 +18,7 @@ use DateTimeImmutable;
  */
 final readonly class VerifiedClaims
 {
-    use ReadsClaims;
+    use ReadsPersonClaims;
 
     /**
      * @param  non-empty-list<string>  $audience

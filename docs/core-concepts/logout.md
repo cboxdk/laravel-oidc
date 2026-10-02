@@ -180,8 +180,9 @@ answers:
 
 `BackChannelLogoutReceived::$token` is a `LogoutToken`: `connection`,
 `issuer`, `subject` (null when the token has only a `sid`), `sessionId` (the
-`sid`, null when it has only a `sub`), `jti`, `issuedAt`, `expiresAt` and
-`claim()`. `matches($claims)` tells whether the session that signed in with
+`sid`, null when it has only a `sub`), `jti`, `issuedAt`, `expiresAt`, and
+the claim readers of `VerifiedClaims` (`string()`, `int()`, `bool()`,
+`stringList()`, `time()`, `claim()`, `has()`, `all()`). `matches($claims)` tells whether the session that signed in with
 `VerifiedClaims` `$claims` is one it ends; use it when you hold the claims of
 a session in hand. Ending sessions of other people needs an index you keep,
 such as the cache keys above or a table of session ids by `sid`.

@@ -288,3 +288,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   covers. `ClientAssertion`, `ClientAuthentication`, `KeySelector`,
   `TokenEndpoint`, `OidcManager`, `Pkce` and `CheckConnectionCommand` are now
   `@internal`, and a docs check refuses a sample that uses an internal class.
+- **Typed claim readers.** `VerifiedClaims`, `UserInfo` and `LogoutToken`
+  read any claim with `string()`, `int()`, `bool()`, `stringList()` and
+  `time()`, each null for a missing claim or one of another JSON type, so
+  code on PHPStan's strictest level needs no narrowing; `claim()` stays as
+  the untyped escape hatch. `LogoutToken` now shares the readers instead of
+  its own copy of `claim()`.

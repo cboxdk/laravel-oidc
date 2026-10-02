@@ -104,7 +104,8 @@ values other than `hd` and `tid` are compared exactly.
 | `tenant` | the value of the pinned tenant claim, or null without a policy |
 | `groups`, `groupsOverage` | see below |
 | `email()`, `emailVerified()`, `name()` | `email`, `email_verified` (true only for the JSON value `true`), `name` |
-| `claim($name, $default)`, `string($name)`, `has($name)`, `all()` | any claim as sent |
+| `string($name)`, `int($name)`, `bool($name)`, `stringList($name)`, `time($name)` | any claim, typed: null when it is missing or of another JSON type (`time()` reads seconds since the epoch, in UTC) |
+| `claim($name, $default)`, `has($name)`, `all()` | any claim as sent, untyped |
 
 Match accounts on issuer and subject, never on email: an email address can
 change hands, and some providers let people set it without proof.

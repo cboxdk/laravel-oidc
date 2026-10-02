@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cbox\Oidc\Logout;
 
+use Cbox\Oidc\Tokens\Concerns\ReadsClaims;
 use Cbox\Oidc\Tokens\VerifiedClaims;
 use DateTimeImmutable;
 
@@ -21,6 +22,8 @@ use DateTimeImmutable;
  */
 final readonly class LogoutToken
 {
+    use ReadsClaims;
+
     /**
      * @param  array<string, mixed>  $claims  every claim of the token, as sent
      */
@@ -57,11 +60,5 @@ final readonly class LogoutToken
         }
 
         return $this->subject === null || hash_equals($this->subject, $claims->subject);
-    }
-
-    /** The claim $name as sent, or $default when there is none. */
-    public function claim(string $name, mixed $default = null): mixed
-    {
-        return array_key_exists($name, $this->claims) ? $this->claims[$name] : $default;
     }
 }
