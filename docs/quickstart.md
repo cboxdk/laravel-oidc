@@ -38,4 +38,16 @@ $connection->discoveryUrl; // 'https://login.example.com/.well-known/openid-conf
 A missing or wrong value throws `InvalidConfiguration`, which names the key and
 the fix.
 
+To check that the package can reach the provider, fetch its discovery
+document:
+
+```php
+use Cbox\Oidc\Discovery\MetadataRepository;
+
+app(MetadataRepository::class)->for($connection)->tokenEndpoint;
+```
+
+An issuer that does not match the document, or a provider the SSRF guard
+refuses, fails here with a [coded error](core-concepts/errors.md).
+
 The login routes and the verified result arrive with the next slices of 0.1.

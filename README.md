@@ -6,10 +6,10 @@ Cbox ID) with the authorization code flow, PKCE and full ID token
 verification, and hands your application a typed, verified result.
 
 > **Status: in development, not released.** Version 0.1 is being built in
-> slices. Today the package has its typed, multi-connection configuration and
-> service provider. The login flow, token verification and the rest of the
-> scope below land in the next slices; the [changelog](CHANGELOG.md) lists what
-> exists.
+> slices. Today the package has its typed, multi-connection configuration,
+> discovery and signing-key handling behind the SSRF guard. The login flow,
+> token verification and the rest of the scope below land in the next slices;
+> the [changelog](CHANGELOG.md) lists what exists.
 
 ## Why
 
@@ -24,7 +24,10 @@ with the cryptography left to an established library.
 
 - Several named connections (providers or tenants) in `config/oidc.php`,
   checked into typed objects. Done.
-- Discovery with an exact issuer match (RFC 8414) and cached metadata.
+- Discovery with an exact issuer match (RFC 8414) and cached metadata. Done.
+- The provider's signing keys (JWKS): cached with the provider's lifetime,
+  refetched once on an unknown `kid` with a cross-process cooldown, and each
+  key checked for type, curve, size, use and alg before it may verify. Done.
 - Authorization code flow with PKCE (S256), with state and nonce in the session.
 - ID token verification: signature through the provider's JWKS (refetched once,
   rate-limited, on an unknown `kid`), a per-connection algorithm allow-list,
@@ -72,6 +75,11 @@ full key and the fix:
 
 See the [configuration reference](docs/configuration/reference.md) for every key.
 
+## Errors
+
+Every exception extends `OidcException` and carries a stable code and a fix.
+See [errors](docs/core-concepts/errors.md) for the list.
+
 ## Honest scope
 
 - The package is a relying party only. It is not an OpenID provider and issues
@@ -81,6 +89,13 @@ See the [configuration reference](docs/configuration/reference.md) for every key
 - Front-channel logout is not supported.
 - The SSRF guard is defence in depth: a network egress allow-list is the only
   complete control. See the guard's own documentation.
+- Provider calls are https only and never follow redirects, so a provider
+  running on a private network or on `localhost` is refused unless you change
+  `config/ssrf.php` on purpose.
+- A key set can stay cached for up to `jwks_max_ttl_seconds` (plus
+  `stale_if_error_seconds` during an outage). When a provider withdraws a
+  compromised key, drop the cache yourself; see
+  [discovery and keys](docs/core-concepts/discovery-and-keys.md#caching).
 
 ## Testing
 
@@ -98,6 +113,9 @@ runs Pint, Rector, PHPStan at level max, the Pest suites, the license check and
 - [Requirements](docs/requirements.md)
 - [Installation](docs/getting-started/installation.md)
 - [Configuration reference](docs/configuration/reference.md)
+- [Discovery and keys](docs/core-concepts/discovery-and-keys.md)
+- [Errors](docs/core-concepts/errors.md)
+- [HTTP client and clock](docs/extension-points/http-client.md)
 - [Security](docs/security/_index.md)
 
 ## License

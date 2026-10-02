@@ -25,6 +25,23 @@ the class of report we most want.
   `authorization_parameters`.
 - The client secret is redacted when a connection is dumped.
 
+## What the HTTP layer prevents
+
+- Every call to a provider, including the URLs a discovery document names,
+  passes the `cboxdk/laravel-ssrf` guard: https only, and no private, loopback
+  or metadata address. The guard checks the URL actually sent and pins the
+  resolved address.
+- Redirects are never followed, and bodies are capped at
+  `oidc.http.max_response_bytes`.
+- A discovery document must name exactly the configured issuer, and every
+  endpoint in it must be https.
+- JSON with the same key twice is refused, so the package and the provider
+  cannot read one document two ways.
+- Keys come from the provider's key set only. Header members that carry or
+  point to a key (`jwk`, `jku`, `x5u`, `x5c`) are never used, a key must fit
+  the algorithm (type, curve, at least 2048-bit RSA, EC points on the curve),
+  and an unknown `kid` refetches the key set at most once per cooldown.
+
 ## Honest scope
 
 - The package is a relying party. It issues no tokens.

@@ -114,6 +114,10 @@ return [
         'jwks_max_ttl_seconds' => 86400,
         // An unknown kid triggers at most one key refetch per this window.
         'jwks_refetch_cooldown_seconds' => 60,
+        // When a document is stale and the provider is unavailable (network
+        // error, timeout, 5xx), keep using the stale copy this much longer.
+        // 0 fails at once. A wrong document is never replaced by a stale one.
+        'stale_if_error_seconds' => 86400,
     ],
 
 ];

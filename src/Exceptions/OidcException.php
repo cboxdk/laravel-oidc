@@ -17,7 +17,7 @@ abstract class OidcException extends RuntimeException
 {
     public function __construct(
         private readonly ErrorCode $errorCode,
-        string $problem,
+        private readonly string $problem,
         private readonly string $fix,
         ?Throwable $previous = null,
     ) {
@@ -27,6 +27,12 @@ abstract class OidcException extends RuntimeException
     public function errorCode(): ErrorCode
     {
         return $this->errorCode;
+    }
+
+    /** What went wrong, without the code and the fix. */
+    public function problem(): string
+    {
+        return $this->problem;
     }
 
     public function fix(): string

@@ -204,15 +204,16 @@ it('refuses an invalid top-level value', function (mixed $values, string $key): 
     'bad connection name' => [['connections' => ['main app' => ConnectionFixtures::minimal()]], 'oidc.connections.main app is not a valid connection name'],
     'unknown default' => [['default' => 'other', 'connections' => ['main' => ConnectionFixtures::minimal()]], 'oidc.default names "other", which is not a configured connection'],
     'timeout too long' => [['connections' => ['main' => ConnectionFixtures::minimal()], 'http' => ['timeout_seconds' => 61]], 'oidc.http.timeout_seconds must be a number from 0.1 to 60'],
+    'stale_if_error too long' => [['connections' => ['main' => ConnectionFixtures::minimal()], 'cache' => ['stale_if_error_seconds' => 604801]], 'oidc.cache.stale_if_error_seconds must be a whole number from 0 to 604800'],
     'jwks ttl range inverted' => [['connections' => ['main' => ConnectionFixtures::minimal()], 'cache' => ['jwks_min_ttl_seconds' => 900, 'jwks_max_ttl_seconds' => 600]], 'oidc.cache.jwks_min_ttl_seconds is larger than jwks_max_ttl_seconds'],
 ]);
 
 it('reads the http and cache settings', function (): void {
     $config = oidcConfig(ConnectionFixtures::minimal(), [
         'http' => ['timeout_seconds' => '2.5', 'connect_timeout_seconds' => 1, 'max_response_bytes' => 65536],
-        'cache' => ['store' => 'redis', 'discovery_ttl_seconds' => 3600, 'jwks_default_ttl_seconds' => 600, 'jwks_min_ttl_seconds' => 60, 'jwks_max_ttl_seconds' => 7200, 'jwks_refetch_cooldown_seconds' => 30],
+        'cache' => ['store' => 'redis', 'discovery_ttl_seconds' => 3600, 'jwks_default_ttl_seconds' => 600, 'jwks_min_ttl_seconds' => 60, 'jwks_max_ttl_seconds' => 7200, 'jwks_refetch_cooldown_seconds' => 30, 'stale_if_error_seconds' => '0'],
     ]);
 
     expect($config->http)->toEqual(new HttpConfig(2.5, 1.0, 65536))
-        ->and($config->cache)->toEqual(new CacheConfig('redis', 3600, 600, 60, 7200, 30));
+        ->and($config->cache)->toEqual(new CacheConfig('redis', 3600, 600, 60, 7200, 30, 0));
 });

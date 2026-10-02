@@ -64,7 +64,8 @@ lists the configured names.
 | `jwks_default_ttl_seconds` | `3600` | Within the min and max below. Used when the provider sends no `max-age`. |
 | `jwks_min_ttl_seconds` | `300` | 0 to 604800, at most the max. |
 | `jwks_max_ttl_seconds` | `86400` | 0 to 604800. |
-| `jwks_refetch_cooldown_seconds` | `60` | 1 to 86400. An unknown `kid` refetches the keys at most once per window. |
+| `jwks_refetch_cooldown_seconds` | `60` | 1 to 86400. An unknown `kid` refetches the keys at most once per window, across processes. |
+| `stale_if_error_seconds` | `86400` | 0 to 604800. When a cached document is stale and the provider is unavailable (network error, timeout, 408, 429 or 5xx), the stale copy is used this much longer. A document the provider serves wrongly is never replaced by a stale copy. 0 fails at once. |
 
 ## Examples
 

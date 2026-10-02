@@ -7,7 +7,8 @@ namespace Cbox\Oidc\Config;
 use Cbox\Oidc\Exceptions\InvalidConfiguration;
 
 /**
- * How long discovery documents and key sets are cached.
+ * How long discovery documents and key sets are cached, and how long a stale
+ * copy may stand in while the provider is unavailable.
  */
 readonly class CacheConfig
 {
@@ -18,6 +19,7 @@ readonly class CacheConfig
         public int $jwksMinTtlSeconds = 300,
         public int $jwksMaxTtlSeconds = 86400,
         public int $jwksRefetchCooldownSeconds = 60,
+        public int $staleIfErrorSeconds = 86400,
     ) {}
 
     public static function fromConfig(ConfigReader $config): self
@@ -36,6 +38,7 @@ readonly class CacheConfig
             $min,
             $max,
             $config->int('jwks_refetch_cooldown_seconds', 60, 1, 86400),
+            $config->int('stale_if_error_seconds', 86400, 0, 604800),
         );
     }
 }

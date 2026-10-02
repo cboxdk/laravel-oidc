@@ -35,4 +35,5 @@ Registered through package auto-discovery, so no manual provider wiring.
 |---|---|---|
 | `web-token/jwt-library` | `^4.2.3` | JWK and JWKS parsing, signature verification and claim checks. 4.2.3 includes the fixes for the June 2026 advisories. |
 | `cboxdk/laravel-ssrf` | `^1.5` | Guards every outbound call to a provider. |
+| `guzzlehttp/guzzle` | `^7.8.2 \|\| ^8.0` | The transport under Laravel's HTTP client; the size limit uses its `on_headers` and `progress` options. |
 | `psr/clock` | `^1.0` | Time comes from a PSR-20 clock, so tests can freeze it. |
