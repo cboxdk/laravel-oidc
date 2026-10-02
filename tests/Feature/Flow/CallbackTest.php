@@ -11,6 +11,7 @@ use Cbox\Oidc\Exceptions\InvalidProviderResponse;
 use Cbox\Oidc\Exceptions\OidcException;
 use Cbox\Oidc\Exceptions\OutboundRequestBlocked;
 use Cbox\Oidc\Exceptions\ProviderUnavailable;
+use Cbox\Oidc\Exceptions\TokenRejected;
 use Cbox\Oidc\Exceptions\TokenRequestRejected;
 use Cbox\Oidc\Flow\AuthorizationFlow;
 use Cbox\Oidc\Flow\AuthorizationOptions;
@@ -19,6 +20,7 @@ use Cbox\Oidc\Flow\CallbackResult;
 use Cbox\Oidc\Flow\Prompt;
 use Cbox\Oidc\Tests\Support\ConnectionFixtures;
 use Cbox\Oidc\Tests\Support\FakeProvider;
+use Cbox\Oidc\Tokens\SigningAlgorithm;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -69,6 +71,56 @@ it('exchanges the code of an approved login for tokens', function (): void {
         ->and($token['form'])->toHaveKeys(['code', 'code_verifier'])
         ->and($token['form'])->not->toHaveKeys(['client_id', 'client_secret'])
         ->and($token['authorization'])->toBe('Basic '.base64_encode('client-1:secret-1'));
+});
+
+it('returns the verified claims of the ID token', function (): void {
+    $request = ($this->flow)()->start();
+    $result = ($this->callback)($this->provider->approve($request->url, ['sub' => 'person-7', 'email' => 'ada@example.com', 'groups' => ['staff']]));
+
+    expect($result->claims->connection)->toBe('main')
+        ->and($result->claims->issuer)->toBe(FakeProvider::ISSUER)
+        ->and($result->claims->subject)->toBe('person-7')
+        ->and($result->claims->email())->toBe('ada@example.com')
+        ->and($result->claims->groups)->toBe(['staff'])
+        ->and($result->claims->authTime?->getTimestamp())->toBe(now()->getTimestamp())
+        ->and($result->claims->has('at_hash'))->toBeTrue();
+});
+
+it('verifies the ID token with each algorithm the provider signs with', function (SigningAlgorithm $algorithm): void {
+    $this->provider->idTokenAlgorithm = $algorithm;
+    $result = ($this->callback)($this->provider->approve(($this->flow)()->start()->url));
+
+    expect($result->claims->subject)->toBe('user-1');
+})->with([SigningAlgorithm::RS256, SigningAlgorithm::ES256, SigningAlgorithm::EdDSA]);
+
+it('refuses an ID token that does not belong to this login', function (array $claims, ErrorCode $code, string $message): void {
+    $query = $this->provider->approve(($this->flow)()->start(options: new AuthorizationOptions(maxAge: 60))->url, $claims);
+
+    rejectedWith(fn (): CallbackResult => ($this->callback)($query), TokenRejected::class, $code, $message);
+})->with([
+    'the nonce of another login' => [['nonce' => 'another-login'], ErrorCode::IdTokenNonceMismatch, 'is not the nonce of this login'],
+    'no nonce' => [['nonce' => null], ErrorCode::IdTokenNonceMismatch, 'has no nonce'],
+    'an at_hash of another access token' => [['at_hash' => SigningAlgorithm::RS256->accessTokenHash('other')], ErrorCode::IdTokenAtHashMismatch, 'does not match the access token'],
+    'no auth_time though max_age was sent' => [['auth_time' => null], ErrorCode::IdTokenAuthTimeInvalid, 'although the login sent max_age 60'],
+    'an old sign-in though max_age was sent' => [fn (): array => ['auth_time' => now()->getTimestamp() - 3600], ErrorCode::IdTokenAuthTimeInvalid, 'longer than the max_age of 60 seconds'],
+    'another audience' => [['aud' => 'client-2'], ErrorCode::TokenAudienceInvalid, 'is not for the client "client-1"'],
+]);
+
+it('refuses an ID token whose issuer differs from the callback\'s iss', function (): void {
+    $query = $this->provider->approve(($this->flow)()->start()->url, ['iss' => 'https://evil.example.test']);
+    $query['iss'] = FakeProvider::ISSUER;
+
+    rejectedWith(fn (): CallbackResult => ($this->callback)($query), TokenRejected::class, ErrorCode::TokenIssuerMismatch, 'names the issuer "https://evil.example.test"');
+});
+
+it('refuses an ID token from a token endpoint that sends one signed with another key', function (): void {
+    $this->provider->tokenResponse = fn (): mixed => Http::response([
+        'access_token' => 'a',
+        'token_type' => 'Bearer',
+        'id_token' => $this->provider->idToken(key: FakeProvider::rsaKey('forger', values: ['kid' => 'rsa-1'])),
+    ]);
+
+    rejectedWith(fn (): CallbackResult => ($this->callback)($this->provider->approve(($this->flow)()->start()->url)), TokenRejected::class, ErrorCode::TokenSignatureInvalid, 'does not verify');
 });
 
 it('carries the nonce the ID token must repeat', function (): void {
@@ -171,19 +223,13 @@ it('checks iss when present even if the provider does not announce it', function
 });
 
 it('reads an Entra iss parameter against the issuer template', function (string $iss, bool $accepted): void {
-    Http::fake([
-        'https://login.microsoftonline.com/organizations/v2.0/.well-known/openid-configuration' => Http::response([
-            ...new FakeProvider()->discovery,
-            'issuer' => 'https://login.microsoftonline.com/{tenantid}/v2.0',
-        ]),
-    ]);
-    $this->fakeSsrfDns(['login.microsoftonline.com' => ['20.190.160.1'], 'idp.example.test' => [FakeProvider::ADDRESS]]);
+    $entra = FakeProvider::entra()->install();
+    $entra->clients['00000000-0000-0000-0000-000000000001'] = ['secret' => 'entra-secret'];
     config(['oidc.connections.entra' => ConnectionFixtures::entraMultiTenant()]);
     app()->forgetInstance(OidcConfig::class);
     app()->forgetInstance(AuthorizationFlow::class);
-    $this->provider->clients['00000000-0000-0000-0000-000000000001'] = ['secret' => 'entra-secret'];
 
-    $query = [...$this->provider->approve(($this->flow)()->start('entra')->url), 'iss' => $iss];
+    $query = [...$entra->approve(($this->flow)()->start('entra')->url, ['tid' => '11111111-1111-1111-1111-111111111111']), 'iss' => $iss];
 
     if ($accepted) {
         expect(($this->callback)($query, 'entra')->responseIssuer)->toBe($iss);

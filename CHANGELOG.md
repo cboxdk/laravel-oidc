@@ -63,7 +63,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   code, then exchanges the code. Failures are `CallbackRejected`
   (`oidc_state_mismatch`, `oidc_transaction_expired`,
   `oidc_callback_issuer_mismatch`, `oidc_callback_invalid`). It returns a
-  `CallbackResult` with the `TokenSet`; the ID token is not verified yet.
+  `CallbackResult` with the `TokenSet` and the verified claims of the ID
+  token.
 - **The token endpoint.** `TokenEndpoint` sends grants with the connection's
   client authentication: `client_secret_basic` (form-encoded first, as RFC
   6749 2.3.1 says), `client_secret_post`, the new `private_key_jwt` (RFC 7523,
@@ -79,6 +80,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A PSR-20 clock.** The package reads time from `Psr\Clock\ClockInterface`;
   the default `CarbonClock` follows Carbon, so Laravel's time travel moves it in
   tests. An application's own clock or HTTP client binding wins.
+
+- **ID token verification.** `IdTokenVerifier` verifies an ID token in a
+  fixed order: compact JWS only (at most 16 KiB, canonical base64url, no JWE,
+  no `crit` or `b64`, no `typ` of another kind of token), `alg` on the
+  connection's allow-list and the provider's, the key by `kid`, the signature
+  through web-token with a one-algorithm manager, then `iss`, `aud` and `azp`,
+  `exp`, `nbf` and `iat` (web-token's checkers with the PSR-20 clock and the
+  connection's leeway), the token's age, `nonce` in constant time, `sub`,
+  `auth_time` against `max_age`, and `at_hash` with the algorithm's hash
+  (SHA-512 for EdDSA). `callback()` now verifies the ID token against the
+  login's nonce and `max_age`, the access token and the callback's `iss`.
+  Failures are `TokenRejected`, with a code per rule and `claim()` naming the
+  claim.
+- **Tenant pinning.** A connection's tenant policy is enforced on the ID
+  token: Google Workspace's `hd` and Microsoft Entra's `tid`, compared without
+  case, other claims exactly. For an Entra `{tenantid}` issuer, `tid` must be a
+  GUID, the issuer is checked with it filled in, and the signing key's own
+  `issuer` must match. Failures are `TenantRejected` (`oidc_tenant_claim_missing`,
+  `oidc_tenant_not_allowed`), which extends `TokenRejected`.
+- **Verified claims.** `VerifiedClaims` gives the issuer, subject, audience,
+  `azp`, `iat`, `exp` and `auth_time` as dates, `amr` (each method once),
+  `acr`, `sid`, the tenant, the groups of the configured claim (null with
+  `groupsOverage` for Entra's group overage), `email()`, `emailVerified()`,
+  `name()`, and every claim through `claim()`, `string()`, `has()` and
+  `all()`. `CallbackResult::$claims` carries them.
+- **Key validity.** A key of the provider's key set marked `revoked`, or
+  outside its `exp` and `nbf` members (OpenID Federation key sets), no longer
+  fits a token.
 
 ### Fixed
 

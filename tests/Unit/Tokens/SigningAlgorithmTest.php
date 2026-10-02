@@ -23,3 +23,21 @@ it('knows the key type and curve of each algorithm', function (SigningAlgorithm 
     [SigningAlgorithm::ES512, 'EC', 'P-521'],
     [SigningAlgorithm::EdDSA, 'OKP', 'Ed25519'],
 ]);
+
+it('hashes tokens with the hash of the algorithm, and SHA-512 for Ed25519', function (SigningAlgorithm $algorithm, string $hash, int $length): void {
+    $expected = rtrim(strtr(base64_encode(substr(hash($hash, 'access-token', true), 0, intdiv(strlen(hash($hash, '', true)), 2))), '+/', '-_'), '=');
+
+    expect($algorithm->tokenHash())->toBe($hash)
+        ->and($algorithm->accessTokenHash('access-token'))->toBe($expected)->toHaveLength($length);
+})->with([
+    [SigningAlgorithm::RS256, 'sha256', 22],
+    [SigningAlgorithm::PS256, 'sha256', 22],
+    [SigningAlgorithm::ES256, 'sha256', 22],
+    [SigningAlgorithm::RS384, 'sha384', 32],
+    [SigningAlgorithm::PS384, 'sha384', 32],
+    [SigningAlgorithm::ES384, 'sha384', 32],
+    [SigningAlgorithm::RS512, 'sha512', 43],
+    [SigningAlgorithm::PS512, 'sha512', 43],
+    [SigningAlgorithm::ES512, 'sha512', 43],
+    [SigningAlgorithm::EdDSA, 'sha512', 43],
+]);

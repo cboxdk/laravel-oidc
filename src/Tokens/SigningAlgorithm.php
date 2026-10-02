@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cbox\Oidc\Tokens;
 
+use Cbox\Oidc\Support\Base64Url;
 use Jose\Component\Signature\Algorithm\EdDSA;
 use Jose\Component\Signature\Algorithm\ES256;
 use Jose\Component\Signature\Algorithm\ES384;
@@ -79,5 +80,31 @@ enum SigningAlgorithm: string
             self::EdDSA => 'Ed25519',
             default => null,
         };
+    }
+
+    /**
+     * The hash at_hash (and c_hash) is made with for a token signed with this
+     * algorithm: the hash of the JWS algorithm (OpenID Connect Core 3.1.3.6),
+     * and SHA-512 for EdDSA with Ed25519, whose signature uses SHA-512 (the
+     * OpenID Foundation's Token Hash Algorithm guidance; Core errata set 2).
+     */
+    public function tokenHash(): string
+    {
+        return match ($this) {
+            self::RS256, self::PS256, self::ES256 => 'sha256',
+            self::RS384, self::PS384, self::ES384 => 'sha384',
+            self::RS512, self::PS512, self::ES512, self::EdDSA => 'sha512',
+        };
+    }
+
+    /**
+     * The at_hash of $accessToken for a token signed with this algorithm: the
+     * left half of its hash, base64url-encoded without padding.
+     */
+    public function accessTokenHash(#[\SensitiveParameter] string $accessToken): string
+    {
+        $hash = hash($this->tokenHash(), $accessToken, true);
+
+        return Base64Url::encode(substr($hash, 0, intdiv(strlen($hash), 2)));
     }
 }

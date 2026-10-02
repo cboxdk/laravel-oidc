@@ -32,12 +32,36 @@ it('runs a login through the documented routes', function (): void {
     $login = $this->get('/oidc/main/login');
     $login->assertRedirect();
 
-    $query = $this->provider->approve((string) $login->headers->get('Location'));
+    $query = $this->provider->approve((string) $login->headers->get('Location'), ['groups' => ['staff']]);
 
     $this->withCookie((string) config('session.cookie'), ($this->sessionCookie)($login))
         ->get('/oidc/main/callback?'.http_build_query($query))
         ->assertOk()
-        ->assertExactJson(['connection' => 'main', 'expires_in' => 3600, 'has_refresh_token' => true]);
+        ->assertExactJson(['issuer' => FakeProvider::ISSUER, 'subject' => 'user-1', 'tenant' => null, 'groups' => ['staff'], 'has_refresh_token' => true]);
+});
+
+it('tells a person of another Google Workspace domain that their organisation cannot sign in', function (): void {
+    $google = new FakeProvider('https://accounts.google.com')->install();
+    $google->clients = ['google-client' => ['secret' => 'google-secret']];
+    $google->discovery['id_token_signing_alg_values_supported'] = ['RS256'];
+
+    $login = $this->get('/oidc/workspace/login');
+    $query = $google->approve((string) $login->headers->get('Location'), ['hd' => 'example.org']);
+
+    $this->withCookie((string) config('session.cookie'), ($this->sessionCookie)($login))
+        ->get('/oidc/workspace/callback?'.http_build_query($query))
+        ->assertRedirect('/')
+        ->assertSessionHas('status', 'Your organisation cannot sign in here.');
+});
+
+it('refuses a login whose ID token fails verification', function (): void {
+    $login = $this->get('/oidc/main/login');
+    $query = $this->provider->approve((string) $login->headers->get('Location'), ['nonce' => 'another-login']);
+
+    $this->withCookie((string) config('session.cookie'), ($this->sessionCookie)($login))
+        ->get('/oidc/main/callback?'.http_build_query($query))
+        ->assertRedirect('/')
+        ->assertSessionHas('status', 'Sign-in failed. Please try again.');
 });
 
 it('refuses a callback from another browser', function (): void {

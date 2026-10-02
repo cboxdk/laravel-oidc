@@ -44,8 +44,8 @@ lists the configured names.
 | `leeway_seconds` | `60` | 0 to 300. Clock skew allowed for `exp`, `nbf`, `iat` and `auth_time`. |
 | `max_token_age_seconds` | `600` | 1 to 86400. An ID token issued longer ago is refused. |
 | `max_age` | `null` | 0 to 31536000. Sent as `max_age`; `auth_time` then becomes required. |
-| `tenant` | `null` | `['claim' => ..., 'allowed' => [...]]`. The claim must be present and its value listed. `['*']` alone accepts any tenant. Required, on `tid`, when the issuer contains `{tenantid}`. |
-| `groups` | `['source' => 'id_token', 'claim' => 'groups']` | `source` is `id_token`, `userinfo` or `none`. |
+| `tenant` | `null` | `['claim' => ..., 'allowed' => [...]]`. The ID token's claim must be present and its value listed; `hd` and `tid` are compared without case, other claims exactly. `['*']` alone accepts any tenant. Required, on `tid`, when the issuer contains `{tenantid}`. See [tenants](../core-concepts/id-token-verification.md#tenants). |
+| `groups` | `['source' => 'id_token', 'claim' => 'groups']` | `source` is `id_token`, `userinfo` or `none`. With `id_token`, the claim must be a list of strings; Entra's group overage gives `groups` null. |
 | `post_logout_redirect_uri` | `null` | Absolute http or https URL. |
 | `authorization_parameters` | `[]` | Map of extra parameters, such as Google's `access_type`. `client_id`, `code_challenge`, `code_challenge_method`, `max_age`, `nonce`, `redirect_uri`, `request`, `request_uri`, `response_mode`, `response_type`, `scope` and `state` are refused, in any case. |
 

@@ -11,10 +11,10 @@ OpenID provider: Microsoft Entra ID, Google Workspace, Okta, Keycloak, Auth0,
 Cbox ID or any other provider that implements OpenID Connect.
 
 > **Status: in development, not released.** Today the package has its typed,
-> multi-connection configuration, and fetches, checks and caches each
-> provider's discovery document and signing keys, and runs the authorization
-> code flow up to the code exchange. ID token verification lands in the next
-> slice of 0.1.
+> multi-connection configuration, fetches, checks and caches each provider's
+> discovery document and signing keys, and runs the authorization code flow
+> through full ID token verification. Refresh, userinfo, logout and the
+> testing fake land in the next slices of 0.1.
 
 ## The mental model
 
@@ -37,6 +37,7 @@ Cbox ID or any other provider that implements OpenID Connect.
 - [Configuration reference](configuration/reference.md): every key and its rule
 - [Discovery and keys](core-concepts/discovery-and-keys.md): how the package learns about a provider
 - [The login flow](core-concepts/login-flow.md): the routes, the options and what each step checks
+- [ID token verification](core-concepts/id-token-verification.md): every rule, tenant pinning and the verified claims
 - [Errors](core-concepts/errors.md): every error code and whether a retry helps
 - [HTTP client and clock](extension-points/http-client.md): what you can rebind
 - [Transaction store](extension-points/transaction-store.md): keep started logins somewhere other than the session

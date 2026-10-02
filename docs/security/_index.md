@@ -52,8 +52,9 @@ the class of report we most want.
   provider.
 - **Stolen codes.** PKCE with S256 is always sent, also by confidential
   clients; the verifier never leaves the server except to the token endpoint.
-- **Replayed ID tokens.** A fresh nonce per login is kept for the ID token
-  check.
+- **Replayed ID tokens.** A fresh nonce per login must come back in the ID
+  token, compared in constant time, and the token may be at most
+  `max_token_age_seconds` old.
 - **Mix-up attacks.** Each connection has its own callback, and the `iss`
   parameter (RFC 9207) must be the pinned issuer whenever the callback carries
   it or the provider announces it.
@@ -65,12 +66,43 @@ the class of report we most want.
 - Tokens, the nonce, the PKCE verifier and private keys are redacted when
   dumped.
 
+## What ID token verification prevents
+
+- **Forged tokens.** Only compact JWS is read, so `alg` cannot hide in an
+  unprotected header (the web-token advisory GHSA-jc38-x7x8-2xc8). `none` and
+  `HS*` are never accepted, which also closes the confusion where an `HS256`
+  token is keyed with the provider's public key. Each signature is verified
+  with an algorithm manager that holds only the token's one allowed algorithm.
+- **Tokens of another kind.** A `typ` that names another kind of token (such
+  as `logout+jwt`) is refused, as are `crit` and `b64`.
+- **Tokens for someone else.** `iss` must be the pinned issuer exactly, and
+  equal the callback's `iss`; `aud` must contain the client id, with `azp`
+  required for several audiences.
+- **Cross-tenant logins.** For an Entra `{tenantid}` issuer, `tid` must be a
+  GUID, the issuer is checked with that `tid` filled in, the signing key's own
+  issuer must match, and the tenant must be on the allow-list. A Google
+  Workspace connection requires the `hd` claim; the `hd` request parameter is
+  never trusted.
+- **Swapped access tokens.** `at_hash`, when present, must match the access
+  token, with the hash of the signing algorithm (SHA-512 for EdDSA).
+- **Stale sign-ins.** With `max_age`, `auth_time` is required and checked.
+- Exceptions name the rule and the claim, never a token or the nonce. The few
+  values they repeat (an issuer, a tenant, an `alg`, a `typ`) are shortened,
+  with control characters replaced.
+
 ## Honest scope
 
 - The package is a relying party. It issues no tokens.
 - Encrypted ID tokens (JWE), signed userinfo, pushed authorization requests
   (PAR), DPoP and the form_post response mode are not part of 0.1.
   Front-channel logout is not supported.
+- Google documents that `iss` may also be `accounts.google.com` without the
+  scheme. Only the configured issuer (`https://accounts.google.com`) is
+  accepted; Google's code flow returns that form.
+- A token is accepted until `exp` plus the leeway, inclusive (web-token's
+  rule), one second more than RFC 7519 strictly allows.
+- Microsoft Entra v2.0 tokens may lack `auth_time`. With `max_age` such a
+  login is refused.
 - The default transaction store trusts the Laravel session. A session that
   cannot reach the callback (a `SameSite=strict` cookie) makes every login
   fail closed with `oidc_state_mismatch`.

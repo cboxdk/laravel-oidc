@@ -13,13 +13,9 @@ The package runs the authorization code flow with PKCE (OpenID Connect Core
   keeps them server-side, and returns an `AuthorizationRequest`: the URL to
   send the browser to. Return it from a route and Laravel answers with the
   redirect. `redirect()` returns the `RedirectResponse` directly.
-- `callback($request, $connection)` checks the browser's return and exchanges
-  the code for tokens. It returns a `CallbackResult`.
-
-> **In development.** In this version `callback()` stops after the code
-> exchange: `CallbackResult::$tokens->idToken` is not verified yet. ID token
-> verification, and the typed claims built from it, are the next slice of
-> 0.1. Do not sign anyone in from an unverified token.
+- `callback($request, $connection)` checks the browser's return, exchanges
+  the code for tokens and verifies the ID token. It returns a `CallbackResult`
+  whose `claims` are the verified claims: sign the person in from those.
 
 ## Routes
 
@@ -35,6 +31,7 @@ the session.
 
 use Cbox\Oidc\Exceptions\AuthorizationDenied;
 use Cbox\Oidc\Exceptions\OidcException;
+use Cbox\Oidc\Exceptions\TenantRejected;
 use Cbox\Oidc\Flow\AuthorizationFlow;
 use Cbox\Oidc\Flow\AuthorizationRequest;
 use Illuminate\Http\JsonResponse;
@@ -56,16 +53,23 @@ Route::middleware('web')->group(function (): void {
             return $denied->interactionRequired()
                 ? $oidc->start($connection)
                 : redirect('/')->with('status', 'Sign-in was cancelled.');
+        } catch (TenantRejected) {
+            return redirect('/')->with('status', 'Your organisation cannot sign in here.');
         } catch (OidcException $exception) {
             report($exception);
 
             return redirect('/')->with('status', 'Sign-in failed. Please try again.');
         }
 
-        // Until ID token verification lands, only show what came back.
+        $claims = $result->claims;
+
+        // Find or create your user by issuer and subject together, sign them
+        // in, and regenerate the session. Here we only show who it is.
         return response()->json([
-            'connection' => $result->connection,
-            'expires_in' => $result->tokens->expiresIn,
+            'issuer' => $claims->issuer,
+            'subject' => $claims->subject,
+            'tenant' => $claims->tenant,
+            'groups' => $claims->groups,
             'has_refresh_token' => $result->tokens->refreshToken !== null,
         ]);
     })->whereIn('connection', $connections);
@@ -128,6 +132,12 @@ passes the SSRF guard's redirect check before the browser is sent there.
    must be JSON with an `access_token`, `token_type` Bearer and an `id_token`.
    An OAuth error is `TokenRequestRejected` (`oidc_token_request_rejected`)
    with its code in `error()`.
+6. **ID token.** The ID token is verified against the login's nonce and
+   `max_age`, the access token (`at_hash`) and the callback's `iss`: the
+   signature, the issuer and tenant, the audience, the times and every other
+   rule of [ID token verification](id-token-verification.md). A failure is
+   `TokenRejected`, or `TenantRejected` for a tenant the connection does not
+   allow.
 
 The state is checked before anything else, so a forged error or code that
 does not carry a live state is refused without a call to the provider.

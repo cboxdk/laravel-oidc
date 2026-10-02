@@ -8,10 +8,10 @@ verification, and hands your application a typed, verified result.
 > **Status: in development, not released.** Version 0.1 is being built in
 > slices. Today the package has its typed, multi-connection configuration,
 > discovery and signing-key handling behind the SSRF guard, and the
-> authorization code flow up to the code exchange. ID token verification and
-> the rest of the scope below land in the next slices; until then, do not sign
-> anyone in from the tokens the callback returns. The
-> [changelog](CHANGELOG.md) lists what exists.
+> authorization code flow through full ID token verification with issuer and
+> tenant pinning. Refresh, userinfo, logout, back-channel logout and the
+> testing fake land in the next slices. The [changelog](CHANGELOG.md) lists
+> what exists.
 
 ## Why
 
@@ -37,9 +37,10 @@ with the cryptography left to an established library.
 - ID token verification: signature through the provider's JWKS (refetched once,
   rate-limited, on an unknown `kid`), a per-connection algorithm allow-list,
   `iss`, `aud`, `azp`, `exp`, `nbf`, `iat` with leeway, `nonce`, `at_hash`,
-  `auth_time` and `max_age`.
+  `auth_time` and `max_age`, and a typed `VerifiedClaims` result. Done.
 - Issuer and tenant pinning: Microsoft Entra multi-tenant (`{tenantid}` checked
-  against `tid`, with per-tenant allow-lists) and the Google Workspace `hd` claim.
+  against `tid`, with per-tenant allow-lists) and the Google Workspace `hd`
+  claim. Done.
 - Refresh tokens, userinfo (with the `sub` match), RP-initiated logout and token
   revocation.
 - A back-channel logout receiver that verifies the logout token and dispatches a
@@ -92,17 +93,26 @@ Route::middleware('web')->group(function () {
     Route::get('/oidc/{connection}/login', fn (AuthorizationFlow $oidc, string $connection) => $oidc->start($connection));
 
     Route::get('/oidc/{connection}/callback', function (Request $request, AuthorizationFlow $oidc, string $connection) {
-        $result = $oidc->callback($request, $connection);
-        // ID token verification comes in the next slice of 0.1.
+        $claims = $oidc->callback($request, $connection)->claims;
+
+        // Verified: find or create your user by issuer and subject.
+        $user = User::firstOrCreate(['oidc_issuer' => $claims->issuer, 'oidc_subject' => $claims->subject], ['email' => $claims->email()]);
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        return redirect('/');
     });
 });
 ```
 
 `start()` sends the browser to the provider with a fresh state, nonce and PKCE
 challenge. `callback()` checks the state, the `iss` parameter and any error,
-then exchanges the code. See [the login flow](docs/core-concepts/login-flow.md)
-for options such as `prompt`, `max_age` and `login_hint`, and for the full
-example with error handling.
+exchanges the code and verifies the ID token. `$result->claims` holds the
+issuer, subject, `auth_time`, `amr`, `acr`, tenant, groups and every other
+claim. See [the login flow](docs/core-concepts/login-flow.md) for options such
+as `prompt`, `max_age` and `login_hint` and the full example with error
+handling, and [ID token verification](docs/core-concepts/id-token-verification.md)
+for every rule and the Google and Entra tenant policies.
 
 ## Errors
 

@@ -78,7 +78,18 @@ final class FakeProvider
     public array $clients = ['client-1' => ['secret' => 'secret-1']];
 
     /** The audience the provider requires in client assertions. */
-    public string $assertionAudience = self::TOKEN_URL;
+    public string $assertionAudience;
+
+    /** The algorithm the token endpoint signs ID tokens with. */
+    public SigningAlgorithm $idTokenAlgorithm = SigningAlgorithm::RS256;
+
+    public string $discoveryUrl;
+
+    public string $jwksUrl;
+
+    public string $authorizationUrl;
+
+    public string $tokenUrl;
 
     /**
      * Answers the token endpoint instead of the provider's own logic when set.
@@ -96,16 +107,31 @@ final class FakeProvider
     /** @var array<string, array{client_id: string, redirect_uri: string, challenge: string, nonce: string, claims: array<string, mixed>}> */
     private array $codes = [];
 
-    public function __construct()
-    {
+    /**
+     * @param  string  $issuer  the issuer the discovery document names; may be an Entra {tenantid} template
+     * @param  string|null  $discoveryUrl  default: the issuer's /.well-known/openid-configuration
+     * @param  string|null  $endpoints  the base of the endpoint URLs; default: the issuer's /oauth
+     */
+    public function __construct(
+        public string $issuer = self::ISSUER,
+        ?string $discoveryUrl = null,
+        ?string $endpoints = null,
+    ) {
+        $endpoints ??= $issuer.'/oauth';
+        $this->discoveryUrl = $discoveryUrl ?? $issuer.'/.well-known/openid-configuration';
+        $this->jwksUrl = $endpoints.'/jwks';
+        $this->authorizationUrl = $endpoints.'/authorize';
+        $this->tokenUrl = $endpoints.'/token';
+        $this->assertionAudience = $this->tokenUrl;
+
         $this->discovery = [
-            'issuer' => self::ISSUER,
-            'authorization_endpoint' => self::ISSUER.'/oauth/authorize',
-            'token_endpoint' => self::ISSUER.'/oauth/token',
-            'userinfo_endpoint' => self::ISSUER.'/oauth/userinfo',
-            'jwks_uri' => self::JWKS_URL,
-            'end_session_endpoint' => self::ISSUER.'/oauth/logout',
-            'revocation_endpoint' => self::ISSUER.'/oauth/revoke',
+            'issuer' => $issuer,
+            'authorization_endpoint' => $this->authorizationUrl,
+            'token_endpoint' => $this->tokenUrl,
+            'userinfo_endpoint' => $endpoints.'/userinfo',
+            'jwks_uri' => $this->jwksUrl,
+            'end_session_endpoint' => $endpoints.'/logout',
+            'revocation_endpoint' => $endpoints.'/revoke',
             'response_types_supported' => ['code'],
             'subject_types_supported' => ['public'],
             'id_token_signing_alg_values_supported' => ['RS256', 'ES256', 'EdDSA'],
@@ -120,18 +146,73 @@ final class FakeProvider
     }
 
     /**
+     * Microsoft Entra's multi-tenant endpoint (organizations): the issuer is
+     * the {tenantid} template, and each key names that issuer, as Entra's
+     * key set does.
+     */
+    public static function entra(): self
+    {
+        $provider = new self(
+            'https://login.microsoftonline.com/{tenantid}/v2.0',
+            'https://login.microsoftonline.com/organizations/v2.0/.well-known/openid-configuration',
+            'https://login.microsoftonline.com/organizations/oauth2/v2.0',
+        );
+        $provider->keys = [self::rsaKey('entra-1', values: ['issuer' => $provider->issuer])];
+        $provider->discovery['id_token_signing_alg_values_supported'] = ['RS256'];
+        unset($provider->discovery['authorization_response_iss_parameter_supported']);
+
+        return $provider;
+    }
+
+    /**
+     * The issuer a token of this provider names: the issuer, or for a
+     * {tenantid} template the template with $claims['tid'] filled in.
+     *
+     * @param  array<string, mixed>  $claims
+     */
+    public function issuerFor(array $claims = []): string
+    {
+        if (is_string($claims['iss'] ?? null)) {
+            return $claims['iss'];
+        }
+
+        return is_string($claims['tid'] ?? null) ? str_replace('{tenantid}', $claims['tid'], $this->issuer) : $this->issuer;
+    }
+
+    /**
+     * A valid ID token for client-1, signed with $algorithm: iss, sub, aud,
+     * iat, exp and nonce, replaced by $claims (a null claim is left out).
+     *
+     * @param  array<string, mixed>  $claims
+     * @param  array<string, mixed>  $header
+     */
+    public function idToken(array $claims = [], SigningAlgorithm $algorithm = SigningAlgorithm::RS256, array $header = [], ?JWK $key = null): string
+    {
+        $now = $this->now();
+
+        return $this->sign($this->withoutNulls(array_replace([
+            'iss' => $this->issuerFor($claims),
+            'sub' => 'user-1',
+            'aud' => 'client-1',
+            'iat' => $now,
+            'exp' => $now + 300,
+            'nonce' => 'nonce-1',
+        ], $claims)), $algorithm, $header, $key);
+    }
+
+    /**
      * Answers the provider's URLs from now on. Call after Http::fake() rules
      * of your own, if any; it adds to them.
      */
     public function install(): self
     {
         Http::fake([
-            self::DISCOVERY_URL => function (): PromiseInterface {
+            $this->discoveryUrl => function (): PromiseInterface {
                 $this->discoveryRequests++;
 
                 return Factory::response($this->discoveryBody ?? $this->json($this->discovery), $this->discoveryStatus, ['Content-Type' => 'application/json']);
             },
-            self::JWKS_URL => function (Request $request): PromiseInterface {
+            $this->jwksUrl => function (Request $request): PromiseInterface {
                 $this->jwksRequests++;
                 $headers = ['Content-Type' => 'application/jwk-set+json'];
 
@@ -141,7 +222,7 @@ final class FakeProvider
 
                 return Factory::response($this->jwksBody ?? $this->json($this->jwks()), $this->jwksStatus, $headers);
             },
-            self::TOKEN_URL => $this->token(...),
+            $this->tokenUrl => $this->token(...),
         ]);
 
         return $this;
@@ -168,7 +249,7 @@ final class FakeProvider
             'claims' => $claims,
         ];
 
-        return ['code' => $code, 'state' => $request['state'], 'iss' => self::ISSUER];
+        return ['code' => $code, 'state' => $request['state'], 'iss' => $this->issuerFor($claims)];
     }
 
     /**
@@ -181,7 +262,7 @@ final class FakeProvider
     {
         $request = $this->authorizationRequest($authorizationUrl);
 
-        return ['error' => $error, 'error_description' => '<script>alert(1)</script>', 'state' => $request['state'], 'iss' => self::ISSUER];
+        return ['error' => $error, 'error_description' => '<script>alert(1)</script>', 'state' => $request['state'], 'iss' => $this->issuerFor()];
     }
 
     /**
@@ -191,7 +272,7 @@ final class FakeProvider
      */
     public function authorizationRequest(string $authorizationUrl): array
     {
-        if (! str_starts_with($authorizationUrl, self::AUTHORIZATION_URL.'?')) {
+        if (! str_starts_with($authorizationUrl, $this->authorizationUrl.'?')) {
             throw new \LogicException(sprintf('Not an authorization request of the fake provider: %s', $authorizationUrl));
         }
 
@@ -312,18 +393,20 @@ final class FakeProvider
         }
 
         $now = $this->now();
-        $idToken = $this->sign(array_replace([
-            'iss' => self::ISSUER,
+        $accessToken = bin2hex(random_bytes(16));
+        $idToken = $this->sign($this->withoutNulls(array_replace([
+            'iss' => $this->issuerFor($issued['claims']),
             'sub' => 'user-1',
             'aud' => $client,
             'iat' => $now,
             'exp' => $now + 300,
             'auth_time' => $now,
             'nonce' => $issued['nonce'],
-        ], $issued['claims']));
+            'at_hash' => $this->idTokenAlgorithm->accessTokenHash($accessToken),
+        ], $issued['claims'])), $this->idTokenAlgorithm);
 
         return Factory::response($this->json([
-            'access_token' => bin2hex(random_bytes(16)),
+            'access_token' => $accessToken,
             'token_type' => 'Bearer',
             'expires_in' => 3600,
             'refresh_token' => bin2hex(random_bytes(16)),
@@ -398,6 +481,15 @@ final class FakeProvider
     private function tokenError(int $status, string $error): PromiseInterface
     {
         return Factory::response($this->json(['error' => $error, 'error_description' => 'Details for <b>'.$error.'</b>']), $status, ['Content-Type' => 'application/json']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $claims
+     * @return array<string, mixed>
+     */
+    private function withoutNulls(array $claims): array
+    {
+        return array_filter($claims, static fn (mixed $value): bool => $value !== null);
     }
 
     private function now(): int

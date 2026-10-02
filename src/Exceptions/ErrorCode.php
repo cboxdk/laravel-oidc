@@ -70,4 +70,63 @@ enum ErrorCode: string
 
     /** The token endpoint refused the request with an OAuth error, such as invalid_grant or invalid_client. */
     case TokenRequestRejected = 'oidc_token_request_rejected';
+
+    /**
+     * The token is not a compact, signed JWT the package reads: too long, not
+     * three base64url parts, encrypted (JWE), a header or payload that is not
+     * a JSON object with unique keys, or a header member the package does not
+     * support (crit, b64).
+     */
+    case TokenMalformed = 'oidc_token_malformed';
+
+    /** The token's typ names another kind of token, such as a logout or access token. */
+    case TokenTypeInvalid = 'oidc_token_type_invalid';
+
+    /**
+     * The token's alg is none, an HS* algorithm, or not one of the connection's
+     * algorithms that the provider also lists.
+     */
+    case TokenAlgorithmNotAllowed = 'oidc_token_algorithm_not_allowed';
+
+    /** The signature does not verify with the provider's key. */
+    case TokenSignatureInvalid = 'oidc_token_signature_invalid';
+
+    /**
+     * The token's iss is not the pinned issuer, differs from the callback's iss
+     * parameter, or does not match the issuer of the key that signed it.
+     */
+    case TokenIssuerMismatch = 'oidc_token_issuer_mismatch';
+
+    /** The token's aud does not contain the client id, or azp is missing or names another client. */
+    case TokenAudienceInvalid = 'oidc_token_audience_invalid';
+
+    /** The token expired (exp), allowing for the connection's leeway. */
+    case TokenExpired = 'oidc_token_expired';
+
+    /** The token is not valid yet: nbf or iat lies in the future, beyond the leeway. */
+    case TokenNotYetValid = 'oidc_token_not_yet_valid';
+
+    /** The token was issued (iat) longer ago than max_token_age_seconds. */
+    case TokenStale = 'oidc_token_stale';
+
+    /** A claim the token must have is missing, or a claim has a form the protocol does not allow. */
+    case TokenClaimInvalid = 'oidc_token_claim_invalid';
+
+    /** The ID token's nonce is missing or is not the nonce of this login. */
+    case IdTokenNonceMismatch = 'oidc_id_token_nonce_mismatch';
+
+    /**
+     * auth_time is missing although max_age was sent, lies in the future, or
+     * says the person signed in longer ago than max_age allows.
+     */
+    case IdTokenAuthTimeInvalid = 'oidc_id_token_auth_time_invalid';
+
+    /** The ID token's at_hash does not match the access token it came with. */
+    case IdTokenAtHashMismatch = 'oidc_id_token_at_hash_mismatch';
+
+    /** The connection pins a tenant, and the token has no tenant claim (tid, hd). */
+    case TenantClaimMissing = 'oidc_tenant_claim_missing';
+
+    /** The token's tenant (tid, hd) is not one the connection allows. */
+    case TenantNotAllowed = 'oidc_tenant_not_allowed';
 }

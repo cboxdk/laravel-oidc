@@ -17,6 +17,22 @@ final class Base64Url
     }
 
     /**
+     * Decodes unpadded base64url, strictly: only the base64url alphabet, no
+     * padding, and only the one canonical encoding of the bytes (the unused
+     * low bits of the last character must be zero). Null for anything else.
+     */
+    public static function decode(string $encoded): ?string
+    {
+        if (preg_match('/^[A-Za-z0-9_-]*$/D', $encoded) !== 1 || strlen($encoded) % 4 === 1) {
+            return null;
+        }
+
+        $bytes = base64_decode(strtr($encoded, '-_', '+/'), true);
+
+        return is_string($bytes) && self::encode($bytes) === $encoded ? $bytes : null;
+    }
+
+    /**
      * A fresh random value of $bytes bytes from the system CSPRNG, encoded.
      * 32 bytes give 43 characters and 256 bits of entropy.
      *

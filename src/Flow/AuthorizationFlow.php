@@ -14,8 +14,12 @@ use Cbox\Oidc\Exceptions\CallbackRejected;
 use Cbox\Oidc\Exceptions\InvalidAuthorizationOptions;
 use Cbox\Oidc\Exceptions\OidcException;
 use Cbox\Oidc\Exceptions\OutboundRequestBlocked;
+use Cbox\Oidc\Exceptions\TenantRejected;
+use Cbox\Oidc\Exceptions\TokenRejected;
 use Cbox\Oidc\Support\Base64Url;
 use Cbox\Oidc\Support\OAuthError;
+use Cbox\Oidc\Tokens\IdTokenExpectations;
+use Cbox\Oidc\Tokens\IdTokenVerifier;
 use Cbox\Oidc\Tokens\TokenEndpoint;
 use Cbox\Ssrf\Contracts\UrlGuard;
 use Cbox\Ssrf\Exceptions\BlockedUrl;
@@ -40,7 +44,9 @@ use Psr\Clock\ClockInterface;
  * 3. an error answer from the provider becomes {@see AuthorizationDenied};
  * 4. the code must be present and well formed;
  * 5. the code is exchanged, with the PKCE verifier and the connection's
- *    client authentication.
+ *    client authentication;
+ * 6. the ID token is verified ({@see IdTokenVerifier}) against the login's
+ *    nonce and max_age, the access token's at_hash and the callback's iss.
  *
  * Give each connection its own callback route, and pass the connection to
  * callback(): a response for one connection then never reaches another.
@@ -52,6 +58,7 @@ final readonly class AuthorizationFlow
         private MetadataRepository $metadata,
         private TransactionStore $transactions,
         private TokenEndpoint $tokens,
+        private IdTokenVerifier $idTokens,
         private UrlGuard $guard,
         private ClockInterface $clock,
     ) {}
@@ -96,10 +103,12 @@ final readonly class AuthorizationFlow
     }
 
     /**
-     * Checks the callback of a login and exchanges its code for tokens.
+     * Checks the callback of a login, exchanges its code for tokens and
+     * verifies the ID token.
      *
      * @throws CallbackRejected when the callback fails a check before the token request
      * @throws AuthorizationDenied when the provider answered with an error
+     * @throws TokenRejected when the ID token fails verification ({@see TenantRejected} for a tenant that is not allowed)
      * @throws OidcException when the token request fails
      */
     public function callback(Request $request, ?string $connection = null): CallbackResult
@@ -128,8 +137,9 @@ final readonly class AuthorizationFlow
         }
 
         $tokens = $this->tokens->exchangeCode($config, $metadata, $code, $transaction->codeVerifier, $transaction->redirectUri);
+        $claims = $this->idTokens->verify($config, (string) $tokens->idToken, IdTokenExpectations::forLogin($transaction, $tokens->accessToken, $parameters->iss));
 
-        return new CallbackResult($config->name, $tokens, $transaction, $parameters->iss);
+        return new CallbackResult($config->name, $claims, $tokens, $transaction, $parameters->iss);
     }
 
     private function transaction(ConnectionConfig $config, CallbackParameters $parameters): AuthorizationTransaction

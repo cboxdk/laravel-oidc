@@ -26,6 +26,7 @@ abstract class TestCase extends Orchestra
         $this->fakeSsrfDns([
             'idp.example.test' => [FakeProvider::ADDRESS],
             'accounts.google.com' => ['142.250.74.45'],
+            'login.microsoftonline.com' => ['20.190.160.1'],
             'internal.example.test' => ['10.0.0.5'],
             'metadata.example.test' => ['169.254.169.254'],
         ]);

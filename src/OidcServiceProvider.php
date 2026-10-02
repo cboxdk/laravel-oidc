@@ -21,6 +21,8 @@ use Cbox\Oidc\Keys\KeySelector;
 use Cbox\Oidc\Keys\KeySetRepository;
 use Cbox\Oidc\Keys\SigningKeys;
 use Cbox\Oidc\Support\CarbonClock;
+use Cbox\Oidc\Tokens\IdTokenVerifier;
+use Cbox\Oidc\Tokens\SignedJwtReader;
 use Cbox\Oidc\Tokens\TokenEndpoint;
 use Cbox\Ssrf\SsrfServiceProvider;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
@@ -69,6 +71,8 @@ class OidcServiceProvider extends ServiceProvider
         $this->app->singleton(ClientAssertion::class);
         $this->app->singleton(ClientAuthentication::class);
         $this->app->singleton(TokenEndpoint::class);
+        $this->app->singleton(SignedJwtReader::class);
+        $this->app->singleton(IdTokenVerifier::class);
         $this->app->singleton(AuthorizationFlow::class);
     }
 

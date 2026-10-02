@@ -18,6 +18,9 @@ readonly class TenantPolicy
 {
     public const string ANY = '*';
 
+    /** Tenant claims whose values are compared without case. */
+    public const array CASE_INSENSITIVE_CLAIMS = ['hd', 'tid'];
+
     /**
      * @param  non-empty-list<string>  $allowed
      */
@@ -47,8 +50,21 @@ readonly class TenantPolicy
         return $this->allowed === [self::ANY];
     }
 
+    /**
+     * Whether $tenant is allowed. Google domains (hd) and Entra tenant ids
+     * (tid) are compared without case, as both are case-insensitive; any
+     * other claim exactly.
+     */
     public function allows(string $tenant): bool
     {
-        return $this->allowsAny() || in_array($tenant, $this->allowed, true);
+        if ($this->allowsAny()) {
+            return true;
+        }
+
+        if (! in_array($this->claim, self::CASE_INSENSITIVE_CLAIMS, true)) {
+            return in_array($tenant, $this->allowed, true);
+        }
+
+        return in_array(strtolower($tenant), array_map(strtolower(...), $this->allowed), true);
     }
 }

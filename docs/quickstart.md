@@ -51,5 +51,6 @@ An issuer that does not match the document, or a provider the SSRF guard
 refuses, fails here with a [coded error](core-concepts/errors.md).
 
 Then add a login route and a callback route; [the login flow](core-concepts/login-flow.md)
-has a complete, tested example. The callback exchanges the code for tokens;
-verifying the ID token and the typed result arrive with the next slice of 0.1.
+has a complete, tested example. The callback exchanges the code, verifies the
+ID token and returns its verified claims; sign the person in by
+`$result->claims->issuer` and `$result->claims->subject`.

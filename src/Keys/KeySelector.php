@@ -6,6 +6,7 @@ namespace Cbox\Oidc\Keys;
 
 use Cbox\Oidc\Exceptions\SigningKeyNotFound;
 use Cbox\Oidc\Exceptions\SigningKeyUnsuitable;
+use Cbox\Oidc\Support\CarbonClock;
 use Cbox\Oidc\Tokens\SigningAlgorithm;
 use Jose\Component\Core\JWK;
 use Jose\Component\Core\Util\Base64UrlSafe;
@@ -15,6 +16,7 @@ use Jose\Component\KeyManagement\Analyzer\ES512KeyAnalyzer;
 use Jose\Component\KeyManagement\Analyzer\KeyAnalyzerManager;
 use Jose\Component\KeyManagement\Analyzer\Message;
 use Jose\Component\KeyManagement\Analyzer\RsaAnalyzer;
+use Psr\Clock\ClockInterface;
 use Throwable;
 
 /**
@@ -29,7 +31,8 @@ use Throwable;
  *   verify, its alg (if any) is the token's, its kty is one web-token's
  *   algorithm takes, its crv is the algorithm's curve, and web-token's key
  *   analyzers find no high-severity flaw: RSA at least 2048 bits with a public
- *   exponent of at least 65537, EC points on the curve. A named key that does
+ *   exponent of at least 65537, EC points on the curve. A key marked revoked,
+ *   or outside its exp and nbf, does not fit either. A named key that does
  *   not fit is {@see SigningKeyUnsuitable}.
  *
  * Header members that carry or point to a key (jwk, jku, x5u, x5c) are never
@@ -39,7 +42,7 @@ final readonly class KeySelector
 {
     private KeyAnalyzerManager $analyzers;
 
-    public function __construct()
+    public function __construct(private ClockInterface $clock = new CarbonClock)
     {
         $this->analyzers = new KeyAnalyzerManager;
         $this->analyzers->add(new RsaAnalyzer);
@@ -123,6 +126,8 @@ final readonly class KeySelector
             $problems[] = sprintf('it is marked for alg %s', is_string($key->get('alg')) ? $key->get('alg') : 'malformed');
         }
 
+        array_push($problems, ...$this->validity($key));
+
         $curve = $algorithm->curve();
 
         if ($curve !== null && $key->get('crv') !== $curve) {
@@ -132,6 +137,39 @@ final readonly class KeySelector
         }
 
         return [...$problems, ...$this->flaws($key, $algorithm)];
+    }
+
+    /**
+     * Whether the key is withdrawn or outside its validity: keys of an
+     * OpenID Federation key set may carry exp, nbf and revoked. A provider
+     * that publishes neither is not affected.
+     *
+     * @return list<string>
+     */
+    private function validity(JWK $key): array
+    {
+        $now = $this->clock->now()->getTimestamp();
+        $problems = [];
+
+        if ($key->has('revoked')) {
+            $problems[] = 'it is marked revoked';
+        }
+
+        foreach (['exp' => 'it expired at %s', 'nbf' => 'it is not valid before %s'] as $member => $problem) {
+            if (! $key->has($member)) {
+                continue;
+            }
+
+            $value = $key->get($member);
+
+            if (! is_int($value) && ! is_float($value)) {
+                $problems[] = sprintf('its %s is not a time', $member);
+            } elseif ($member === 'exp' ? $value <= $now : $value > $now) {
+                $problems[] = sprintf($problem, gmdate('Y-m-d\\TH:i:s\\Z', (int) $value));
+            }
+        }
+
+        return $problems;
     }
 
     /**
