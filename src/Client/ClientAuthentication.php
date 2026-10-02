@@ -19,7 +19,7 @@ use SensitiveParameter;
  *   form-urlencoded first, as RFC 6749 2.3.1 says;
  * - client_secret_post: client_id and client_secret in the form;
  * - private_key_jwt: client_id, client_assertion_type and a fresh
- *   client_assertion in the form;
+ *   client_assertion in the form, whose audience is $url (or the issuer);
  * - none: client_id in the form, for a public client.
  */
 final readonly class ClientAuthentication
@@ -46,7 +46,7 @@ final readonly class ClientAuthentication
             case ClientAuthMethod::PrivateKeyJwt:
                 $form['client_id'] = $connection->clientId;
                 $form['client_assertion_type'] = ClientAssertion::TYPE;
-                $form['client_assertion'] = $this->assertion->sign($connection, $metadata);
+                $form['client_assertion'] = $this->assertion->sign($connection, $metadata, $url);
                 break;
             case ClientAuthMethod::None:
                 $form['client_id'] = $connection->clientId;

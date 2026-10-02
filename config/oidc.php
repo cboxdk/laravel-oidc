@@ -52,8 +52,10 @@ return [
                 'key_id' => env('OIDC_CLIENT_KEY_ID'),
                 // RS256, PS256, ES256 or EdDSA (and the 384/512 variants).
                 'algorithm' => 'RS256',
-                // token_endpoint (OpenID Connect Core; Entra, Okta) or issuer.
-                'audience' => 'token_endpoint',
+                // endpoint: the URL the assertion is sent to (the token
+                // endpoint for logins, as OpenID Connect Core says; Entra,
+                // Okta), or issuer (RFC 7523bis). Use a key per connection.
+                'audience' => 'endpoint',
                 // Extra header members, such as Entra's x5t#S256 thumbprint.
                 'headers' => [],
                 'lifetime_seconds' => 60,

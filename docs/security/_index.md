@@ -50,6 +50,10 @@ the class of report we most want.
   and within `oidc.flow.transaction_ttl_seconds`. The state is checked before
   anything else, so a forged code or error is refused without a call to the
   provider.
+- **Client assertions for the wrong party.** A `private_key_jwt` assertion
+  names the URL it is sent to (or the issuer) as `aud`, so a provider that
+  advertises another provider's token endpoint never receives an assertion
+  that provider accepts. `oidc:check` warns when two connections share a key.
 - **Stolen codes.** PKCE with S256 is always sent, also by confidential
   clients; the verifier never leaves the server except to the token endpoint.
 - **Replayed ID tokens.** A fresh nonce per login must come back in the ID

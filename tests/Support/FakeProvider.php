@@ -77,8 +77,11 @@ final class FakeProvider
      */
     public array $clients = ['client-1' => ['secret' => 'secret-1']];
 
-    /** The audience the provider requires in client assertions. */
-    public string $assertionAudience;
+    /**
+     * The audience the provider requires in client assertions; null for the
+     * URL of the endpoint the assertion is sent to.
+     */
+    public ?string $assertionAudience = null;
 
     /** The algorithm the token endpoint signs ID tokens with. */
     public SigningAlgorithm $idTokenAlgorithm = SigningAlgorithm::RS256;
@@ -183,7 +186,6 @@ final class FakeProvider
         $this->userinfoUrl = $endpoints.'/userinfo';
         $this->revocationUrl = $endpoints.'/revoke';
         $this->endSessionUrl = $endpoints.'/logout';
-        $this->assertionAudience = $this->tokenUrl;
 
         $this->discovery = [
             'issuer' => $issuer,
@@ -493,7 +495,7 @@ final class FakeProvider
             return ($this->tokenResponse)($request);
         }
 
-        $client = $this->authenticate($form, $authorization);
+        $client = $this->authenticate($form, $authorization, $this->tokenUrl);
 
         if ($client === null) {
             return $this->tokenError(401, 'invalid_client');
@@ -621,7 +623,7 @@ final class FakeProvider
             return ($this->revocationResponse)($request);
         }
 
-        $client = $this->authenticate($form, $authorization);
+        $client = $this->authenticate($form, $authorization, $this->revocationUrl);
 
         if ($client === null) {
             return $this->tokenError(401, 'invalid_client');
@@ -645,7 +647,7 @@ final class FakeProvider
      *
      * @param  array<array-key, mixed>  $form
      */
-    private function authenticate(array $form, ?string $authorization): ?string
+    private function authenticate(array $form, ?string $authorization, string $endpoint): ?string
     {
         if ($authorization !== null && str_starts_with($authorization, 'Basic ')) {
             [$id, $secret] = array_map(urldecode(...), explode(':', (string) base64_decode(substr($authorization, 6), true), 2) + [1 => '']);
@@ -667,13 +669,13 @@ final class FakeProvider
         if (isset($form['client_assertion'])) {
             return ($form['client_assertion_type'] ?? null) === 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'
                 && isset($client['public_key']) && is_string($form['client_assertion'])
-                && $this->verifyAssertion($form['client_assertion'], $client['public_key'], $id) ? $id : null;
+                && $this->verifyAssertion($form['client_assertion'], $client['public_key'], $id, $endpoint) ? $id : null;
         }
 
         return ($client['public'] ?? false) === true ? $id : null;
     }
 
-    private function verifyAssertion(string $assertion, JWK $key, string $clientId): bool
+    private function verifyAssertion(string $assertion, JWK $key, string $clientId, string $endpoint): bool
     {
         try {
             $jws = new CompactSerializer()->unserialize($assertion);
@@ -698,7 +700,7 @@ final class FakeProvider
 
         return ($claims['iss'] ?? null) === $clientId
             && ($claims['sub'] ?? null) === $clientId
-            && ($claims['aud'] ?? null) === $this->assertionAudience
+            && ($claims['aud'] ?? null) === ($this->assertionAudience ?? $endpoint)
             && is_int($claims['exp'] ?? null) && $claims['exp'] > $now
             && is_string($claims['jti'] ?? null);
     }

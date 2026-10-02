@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cbox\Oidc\Diagnostics;
 
+use Cbox\Oidc\Config\ClientAssertionConfig;
 use Cbox\Oidc\Config\ConnectionConfig;
 use Cbox\Oidc\Config\GroupsSource;
 use Cbox\Oidc\Config\OidcConfig;
@@ -55,12 +56,13 @@ final readonly class ConnectionDiagnostics
     public function diagnose(?string $connection = null): Diagnosis
     {
         try {
-            $config = $this->container->make(OidcConfig::class)->connection($connection);
+            $all = $this->container->make(OidcConfig::class);
+            $config = $all->connection($connection);
         } catch (OidcException $exception) {
             return new Diagnosis($connection ?? 'default', [Finding::failed('configuration', $exception)]);
         }
 
-        $findings = $this->configuration($config);
+        $findings = $this->configuration($config, $all);
 
         try {
             $response = $this->container->make(HttpClient::class)->send(HttpRequest::get($config->discoveryUrl, ['Accept' => 'application/json']));
@@ -81,7 +83,7 @@ final readonly class ConnectionDiagnostics
     /**
      * @return list<Finding>
      */
-    private function configuration(ConnectionConfig $config): array
+    private function configuration(ConnectionConfig $config, OidcConfig $all): array
     {
         $findings = [Finding::pass('configuration', sprintf('Issuer %s, client %s, client_auth %s.', $config->issuer, $config->clientId, $config->clientAuth->value))];
 
@@ -96,6 +98,16 @@ final readonly class ConnectionDiagnostics
             );
         }
 
+        $sharing = $this->sharedAssertionKey($config, $all);
+
+        if ($sharing !== []) {
+            $findings[] = Finding::warn(
+                'client_assertion',
+                sprintf('The private_key_jwt key is also the key of connection %s. A provider that turns hostile can then present an assertion it received as this client to the other provider, wherever an audience is accepted for both.', implode(', ', $sharing)),
+                sprintf('Give oidc.connections.%s.client_assertion a key of its own, and register only its public half at this provider.', $config->name),
+            );
+        }
+
         if ($config->tenant instanceof TenantPolicy) {
             $findings[] = $config->tenant->allowsAny()
                 ? Finding::warn('tenant', sprintf('Any value of the %s claim is accepted; every organisation of the provider can sign in.', $config->tenant->claim), sprintf('List the tenants you accept in oidc.connections.%s.tenant.allowed, unless any organisation may sign in on purpose.', $config->name))
@@ -103,6 +115,29 @@ final readonly class ConnectionDiagnostics
         }
 
         return $findings;
+    }
+
+    /**
+     * The other connections that sign client assertions with the same key.
+     *
+     * @return list<string>
+     */
+    private function sharedAssertionKey(ConnectionConfig $config, OidcConfig $all): array
+    {
+        if (! $config->clientAssertion instanceof ClientAssertionConfig) {
+            return [];
+        }
+
+        $thumbprint = $config->clientAssertion->key->toPublic()->thumbprint('sha256');
+        $sharing = [];
+
+        foreach ($all->connections as $name => $other) {
+            if ($name !== $config->name && $other->clientAssertion instanceof ClientAssertionConfig && hash_equals($thumbprint, $other->clientAssertion->key->toPublic()->thumbprint('sha256'))) {
+                $sharing[] = sprintf('"%s"', $name);
+            }
+        }
+
+        return $sharing;
     }
 
     /**

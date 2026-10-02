@@ -188,7 +188,7 @@ For `private_key_jwt`, the key and its settings live under `client_assertion`:
     'key_path' => storage_path('oidc/client.pem'),   // or 'key' => env('OIDC_CLIENT_KEY')
     'key_id' => env('OIDC_CLIENT_KEY_ID'),
     'algorithm' => 'RS256',
-    'audience' => 'token_endpoint',
+    'audience' => 'endpoint',
     // Microsoft Entra with a certificate: its SHA-256 thumbprint.
     'headers' => ['x5t#S256' => env('OIDC_CLIENT_CERT_THUMBPRINT')],
 ],
@@ -197,11 +197,18 @@ For `private_key_jwt`, the key and its settings live under `client_assertion`:
 The key is read when the configuration is parsed. It must be a private RSA (at
 least 2048 bits), EC or Ed25519 key that fits the algorithm; an encrypted key
 needs `passphrase`. Each assertion has `iss` and `sub` set to the client id,
-`aud` set to the token endpoint (or the issuer with `audience => issuer`), a
-fresh `jti`, and `iat`, `nbf` and `exp` from the clock, valid for
+`aud` set to the URL it is sent to (the token endpoint for a login or a
+refresh, the revocation endpoint for a revocation), or to the issuer with
+`audience => issuer`, a fresh `jti`, and `iat`, `nbf` and `exp` from the clock, valid for
 `lifetime_seconds` (60 by default). When the provider lists
 `token_endpoint_auth_signing_alg_values_supported`, the algorithm must be on
 it.
+
+Because `aud` is the URL the assertion goes to (or the issuer), a provider
+that lists another party's token endpoint among its own endpoints only ever
+receives an assertion for its own URL. Still give every connection a key of
+its own and register only that key's public half at its provider;
+`oidc:check` warns when two connections share a key.
 
 ## Sessions and cookies
 

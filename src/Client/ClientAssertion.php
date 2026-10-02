@@ -19,9 +19,14 @@ use Psr\Clock\ClockInterface;
  * Signs the client assertion of private_key_jwt client authentication (RFC
  * 7523 2.2 and 3, OpenID Connect Core 9) with web-token.
  *
- * Claims: iss and sub are the client id, aud the token endpoint (or the
- * issuer, when configured), jti a fresh random value, and iat, nbf and exp
- * from the clock, valid for client_assertion.lifetime_seconds.
+ * Claims: iss and sub are the client id, aud the URL of the endpoint the
+ * assertion is sent to (or the issuer, when configured), jti a fresh random
+ * value, and iat, nbf and exp from the clock, valid for
+ * client_assertion.lifetime_seconds.
+ *
+ * The audience is bound to where the assertion goes, so a provider that
+ * names another party's URL as one of its endpoints never receives an
+ * assertion that party accepts.
  */
 final readonly class ClientAssertion
 {
@@ -31,7 +36,10 @@ final readonly class ClientAssertion
         private ClockInterface $clock,
     ) {}
 
-    public function sign(ConnectionConfig $connection, ProviderMetadata $metadata): string
+    /**
+     * @param  string  $endpoint  the URL the assertion is sent to
+     */
+    public function sign(ConnectionConfig $connection, ProviderMetadata $metadata, string $endpoint): string
     {
         $config = $connection->clientAssertion ?? throw new LogicException(sprintf('Connection "%s" does not use private_key_jwt.', $connection->name));
         $now = $this->clock->now()->getTimestamp();
@@ -39,7 +47,7 @@ final readonly class ClientAssertion
         $claims = [
             'iss' => $connection->clientId,
             'sub' => $connection->clientId,
-            'aud' => $config->audience === AssertionAudience::Issuer ? $metadata->issuer : $metadata->tokenEndpoint,
+            'aud' => $config->audience === AssertionAudience::Issuer ? $metadata->issuer : $endpoint,
             'jti' => Base64Url::random(32),
             'iat' => $now,
             'nbf' => $now,

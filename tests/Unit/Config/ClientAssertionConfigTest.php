@@ -46,7 +46,7 @@ it('reads a private key from PEM text with the defaults', function (): void {
     expect($connection->clientAuth)->toBe(ClientAuthMethod::PrivateKeyJwt)
         ->and($connection->clientSecret)->toBeNull()
         ->and($connection->clientAssertion?->algorithm)->toBe(SigningAlgorithm::RS256)
-        ->and($connection->clientAssertion?->audience)->toBe(AssertionAudience::TokenEndpoint)
+        ->and($connection->clientAssertion?->audience)->toBe(AssertionAudience::Endpoint)
         ->and($connection->clientAssertion?->keyId)->toBeNull()
         ->and($connection->clientAssertion?->headers)->toBe([])
         ->and($connection->clientAssertion?->lifetimeSeconds)->toBe(60)

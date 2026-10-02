@@ -9,12 +9,14 @@ use Cbox\Oidc\Exceptions\InvalidProviderResponse;
 use Cbox\Oidc\Exceptions\OutboundRequestBlocked;
 use Cbox\Oidc\Exceptions\ProviderUnavailable;
 use Cbox\Oidc\Exceptions\RevocationRejected;
+use Cbox\Oidc\Tests\Support\ClientKeys;
 use Cbox\Oidc\Tests\Support\ConnectionFixtures;
 use Cbox\Oidc\Tests\Support\FakeProvider;
 use Cbox\Oidc\Tests\Support\Refusals;
 use Cbox\Oidc\Tokens\TokenRevocation;
 use Cbox\Oidc\Tokens\TokenTypeHint;
 use Illuminate\Http\Client\Factory;
+use Illuminate\Support\Facades\Http;
 
 beforeEach(function (): void {
     $this->freezeSecond();
@@ -131,4 +133,54 @@ it('sends the token only through the SSRF guard', function (): void {
     $this->provider->discovery['revocation_endpoint'] = 'https://metadata.example.test/revoke';
 
     Refusals::assert(fn () => ($this->revocation)()->revoke('token-1'), ErrorCode::HttpBlocked, OutboundRequestBlocked::class);
+});
+
+it('signs a private_key_jwt revocation for the revocation endpoint', function (): void {
+    $this->provider->clients['client-1'] = ['public_key' => ClientKeys::publicJwk(ClientKeys::rsa())];
+    Refusals::useConnection('main', ConnectionFixtures::minimal(['client_auth' => 'private_key_jwt', 'client_secret' => null, 'client_assertion' => ['key' => ClientKeys::rsa()]]));
+
+    ($this->revocation)()->revoke('token-1');
+
+    expect($this->provider->revocationRequests)->toHaveCount(1)
+        ->and($this->provider->lastAssertion['aud'] ?? null)->toBe($this->provider->revocationUrl);
+});
+
+it('never hands another provider an assertion for an honest token endpoint (audience injection)', function (): void {
+    $this->fakeSsrfDns(['idp.example.test' => [FakeProvider::ADDRESS], 'evil.example.test' => ['93.184.216.36']]);
+    $key = ClientKeys::rsa();
+    $this->provider->clients['client-1'] = ['public_key' => ClientKeys::publicJwk($key)];
+
+    // A connection whose provider advertises the honest provider's token
+    // endpoint as its own, and keeps its revocation endpoint to itself. The
+    // application signs for both with one key and one client id.
+    $evil = new FakeProvider('https://evil.example.test');
+    $evil->clients['client-1'] = ['public_key' => ClientKeys::publicJwk($key)];
+    $evil->discovery['token_endpoint'] = FakeProvider::TOKEN_URL;
+    $evil->install();
+    config(['oidc.connections.evil' => ConnectionFixtures::minimal([
+        'issuer' => 'https://evil.example.test',
+        'client_auth' => 'private_key_jwt',
+        'client_secret' => null,
+        'client_assertion' => ['key' => $key],
+        'redirect_uri' => 'https://app.example.test/oidc/evil/callback',
+    ])]);
+    Refusals::useConnection('main', ConnectionFixtures::minimal());
+
+    ($this->revocation)()->revoke('token-1', connection: 'evil');
+    $stolen = (string) $evil->revocationRequests[0]['form']['client_assertion'];
+
+    expect($evil->lastAssertion['aud'] ?? null)->toBe($evil->revocationUrl);
+
+    // Replayed at the honest token endpoint, the assertion is refused.
+    $refreshToken = $this->provider->issueRefreshToken();
+    $response = Http::asForm()->post(FakeProvider::TOKEN_URL, [
+        'grant_type' => 'refresh_token',
+        'refresh_token' => $refreshToken,
+        'client_id' => 'client-1',
+        'client_assertion_type' => 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+        'client_assertion' => $stolen,
+    ]);
+
+    expect($response->status())->toBe(401)
+        ->and($response->json('error'))->toBe('invalid_client');
 });

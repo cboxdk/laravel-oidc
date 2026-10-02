@@ -6,19 +6,25 @@ namespace Cbox\Oidc\Config;
 
 /**
  * What a private_key_jwt client assertion names as its audience (aud).
+ *
+ * Either way, an assertion is only good where it was sent: a provider that
+ * advertises another party's URL as one of its endpoints receives an
+ * assertion for its own URL or its own issuer, never one another provider
+ * accepts (the audience injection that the 2025 update of RFC 7523 closes).
  */
 enum AssertionAudience: string
 {
     /**
-     * The provider's token endpoint URL, as OpenID Connect Core 9 says and
-     * Microsoft Entra and Okta require. The default.
+     * The URL of the endpoint the assertion is sent to: the token endpoint
+     * for a token request, as OpenID Connect Core 9 says and Microsoft Entra
+     * and Okta require, and the revocation endpoint for a revocation. The
+     * default.
      */
-    case TokenEndpoint = 'token_endpoint';
+    case Endpoint = 'endpoint';
 
     /**
      * The provider's issuer identifier, which the 2025 update of RFC 7523
-     * recommends because it cannot be mixed up between providers. Use it
-     * where the provider accepts it.
+     * requires. Use it where the provider accepts it.
      */
     case Issuer = 'issuer';
 }

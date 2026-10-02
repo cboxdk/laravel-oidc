@@ -6,6 +6,7 @@ use Cbox\Oidc\Config\OidcConfig;
 use Cbox\Oidc\Diagnostics\CheckStatus;
 use Cbox\Oidc\Diagnostics\ConnectionDiagnostics;
 use Cbox\Oidc\Discovery\MetadataRepository;
+use Cbox\Oidc\Tests\Support\ClientKeys;
 use Cbox\Oidc\Tests\Support\ConnectionFixtures;
 use Cbox\Oidc\Tests\Support\FakeProvider;
 use Illuminate\Support\Facades\Artisan;
@@ -240,4 +241,23 @@ it('counts findings by status', function (): void {
         ->and($diagnosis->count(CheckStatus::Pass))->toBe(9)
         ->and($diagnosis->count(CheckStatus::Fail))->toBe(0)
         ->and($diagnosis->toArray()['connection'])->toBe('main');
+});
+
+it('warns when two connections sign client assertions with one key', function (): void {
+    $key = ClientKeys::rsa();
+    $keyJwt = ['client_auth' => 'private_key_jwt', 'client_secret' => null];
+    $this->provider->discovery['token_endpoint_auth_methods_supported'] = ['private_key_jwt'];
+    config(['oidc.connections' => [
+        'main' => ConnectionFixtures::minimal([...$keyJwt, 'client_assertion' => ['key' => $key]]),
+        'second' => ConnectionFixtures::minimal([...$keyJwt, 'client_assertion' => ['key' => $key], 'redirect_uri' => 'https://app.example.test/oidc/second/callback']),
+        'third' => ConnectionFixtures::minimal([...$keyJwt, 'client_assertion' => ['key' => ClientKeys::rsa(3072)], 'redirect_uri' => 'https://app.example.test/oidc/third/callback']),
+    ]]);
+
+    $this->artisan('oidc:check')
+        ->expectsOutputToContain('WARN  client_assertion The private_key_jwt key is also the key of connection "second".')
+        ->assertExitCode(0);
+
+    [, $document] = ($this->json)(['connection' => 'third']);
+
+    expect(($this->statuses)($document['connections'][0]))->not->toContain('warn client_assertion');
 });

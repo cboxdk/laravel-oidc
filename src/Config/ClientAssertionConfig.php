@@ -48,14 +48,14 @@ readonly class ClientAssertionConfig
             throw InvalidConfiguration::at($config->key('algorithm'), 'is not a supported signing algorithm', sprintf('Set %s to one of %s.', $config->key('algorithm'), implode(', ', SigningAlgorithm::names())));
         }
 
-        $audience = AssertionAudience::tryFrom($config->string('audience', AssertionAudience::TokenEndpoint->value));
+        $audience = AssertionAudience::tryFrom($config->string('audience', AssertionAudience::Endpoint->value));
 
         if ($audience === null) {
-            throw InvalidConfiguration::at($config->key('audience'), 'is not a known assertion audience', sprintf('Set %s to token_endpoint or issuer.', $config->key('audience')));
+            throw InvalidConfiguration::at($config->key('audience'), 'is not a known assertion audience', sprintf('Set %s to endpoint or issuer.', $config->key('audience')));
         }
 
         if ($audience === AssertionAudience::Issuer && $templatedIssuer) {
-            throw InvalidConfiguration::at($config->key('audience'), 'cannot be issuer when the issuer uses {tenantid}', sprintf('Set %s to token_endpoint; a templated issuer names no single provider.', $config->key('audience')));
+            throw InvalidConfiguration::at($config->key('audience'), 'cannot be issuer when the issuer uses {tenantid}', sprintf('Set %s to endpoint; a templated issuer names no single provider.', $config->key('audience')));
         }
 
         $headers = $config->stringMap('headers');

@@ -207,3 +207,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   of them, or the callback fails with the new code
   `oidc_id_token_acr_mismatch`. Before, a step-up removed from the URL in the
   browser came back as an accepted single-factor login.
+- **private_key_jwt assertions are bound to where they go.** The `audience`
+  setting `token_endpoint` is now `endpoint`: the assertion's `aud` is the URL
+  it is sent to (the token endpoint for a login or refresh, the revocation
+  endpoint for a revocation), or the issuer with `audience => issuer`. Before,
+  a revocation carried an assertion for the token endpoint to whatever
+  `revocation_endpoint` the discovery document named, so a hostile provider
+  could collect an assertion another provider accepted. `oidc:check` warns
+  when two connections sign with one key.
