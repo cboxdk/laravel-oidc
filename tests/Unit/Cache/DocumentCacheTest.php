@@ -129,3 +129,45 @@ it('claims a slot once per window', function (): void {
         ->and($this->cache->claim('slot', 60))->toBeFalse()
         ->and($this->cache->claim('other', 60))->toBeTrue();
 });
+
+it('stops serving a document another process forgot within a few seconds', function (): void {
+    // Two long-lived workers (Octane, queue) share one store.
+    $worker = new DocumentCache($this->store, $this->clock);
+    $console = new DocumentCache($this->store, $this->clock);
+
+    expect($worker->remember('jwks', 0, ($this->fetch)('compromised', 86400)))->toBe('compromised');
+
+    $console->forget('jwks');
+
+    $this->clock->now += DocumentCache::LOCAL_SECONDS - 1;
+    expect($worker->remember('jwks', 0, ($this->fetch)('rotated', 86400)))->toBe('compromised');
+
+    $this->clock->now += 1;
+    expect($worker->remember('jwks', 0, ($this->fetch)('rotated', 86400)))->toBe('rotated')
+        ->and($this->fetches)->toBe(2);
+});
+
+it('does not fall back to a copy another process forgot while the provider is down', function (): void {
+    $worker = new DocumentCache($this->store, $this->clock);
+    $worker->remember('jwks', 86400, ($this->fetch)('compromised', 10));
+    new DocumentCache($this->store, $this->clock)->forget('jwks');
+
+    $this->clock->now += 20;
+
+    expect(fn (): string => $worker->remember('jwks', 86400, fn (): FetchedDocument => throw ProviderUnavailable::status('https://idp.example.test/keys', 503)))
+        ->toThrow(ProviderUnavailable::class);
+});
+
+it('picks up a newer copy another process stored while its own is still fresh', function (): void {
+    $worker = new DocumentCache($this->store, $this->clock);
+    $other = new DocumentCache($this->store, $this->clock);
+
+    $worker->remember('k', 0, ($this->fetch)('v1', 1000));
+    $this->clock->now += 1;
+    $other->remember('k', 0, ($this->fetch)('v2', 1000), refresh: true);
+
+    $this->clock->now += DocumentCache::LOCAL_SECONDS;
+
+    expect($worker->remember('k', 0, ($this->fetch)('v3', 1000)))->toBe('v2')
+        ->and($this->fetches)->toBe(2);
+});

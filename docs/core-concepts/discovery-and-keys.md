@@ -97,8 +97,13 @@ with a wrong document is never covered by a stale copy.
 Freshness is decided by the package's PSR-20 clock. The default clock follows
 Carbon, so `$this->travel()` in your tests moves it together with the cache.
 
-To drop a cached document at once, for example when a provider withdraws a
-compromised key:
+Each process keeps its own copy of a document, and reads the cache store
+again at least every five seconds, so a document dropped from the store is
+dropped everywhere within seconds: also in Octane and queue workers that run
+for hours. Drop a cached document, for example when a provider withdraws a
+compromised key, from any process that shares the cache store (`artisan
+tinker`, a command or a route). With the array or file store, which processes
+do not share, run it in each.
 
 <!-- example: forget-cache -->
 ```php

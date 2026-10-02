@@ -215,3 +215,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `revocation_endpoint` the discovery document named, so a hostile provider
   could collect an assertion another provider accepted. `oidc:check` warns
   when two connections sign with one key.
+- **Dropping a cached key set reaches long-lived workers.** Each process now
+  trusts its own copy of a discovery document or key set for at most five
+  seconds (`DocumentCache::LOCAL_SECONDS`) before it reads the cache store
+  again. Before, `KeySetRepository::forget()` left Octane, Horizon and queue
+  workers verifying with a withdrawn key until their copy went stale, up to
+  `jwks_max_ttl_seconds`.

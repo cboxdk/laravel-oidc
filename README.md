@@ -144,7 +144,8 @@ See [errors](docs/core-concepts/errors.md) for the list.
   `config/ssrf.php` on purpose.
 - A key set can stay cached for up to `jwks_max_ttl_seconds` (plus
   `stale_if_error_seconds` during an outage). When a provider withdraws a
-  compromised key, drop the cache yourself; see
+  compromised key, drop the cache yourself; every process that shares the
+  cache store stops using the old key within five seconds. See
   [discovery and keys](docs/core-concepts/discovery-and-keys.md#caching).
 
 ## Testing the package

@@ -77,7 +77,9 @@ final readonly class KeySetRepository
 
     /**
      * Drops the cached key set, so the next call fetches it again; for when a
-     * provider withdraws a compromised key.
+     * provider withdraws a compromised key. Other processes that share the
+     * cache store (Octane workers, queue workers) stop using their copy
+     * within {@see DocumentCache::LOCAL_SECONDS} seconds.
      */
     public function forget(ConnectionConfig $connection, ProviderMetadata $metadata): void
     {

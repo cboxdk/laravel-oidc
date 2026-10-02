@@ -49,7 +49,9 @@ final readonly class MetadataRepository
     }
 
     /**
-     * Drops the cached document, so the next call fetches it again.
+     * Drops the cached document, so the next call fetches it again. Other
+     * processes that share the cache store stop using their copy within
+     * {@see DocumentCache::LOCAL_SECONDS} seconds.
      */
     public function forget(ConnectionConfig $connection): void
     {

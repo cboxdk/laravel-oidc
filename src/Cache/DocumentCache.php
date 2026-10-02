@@ -11,7 +11,10 @@ use Psr\Clock\ClockInterface;
 
 /**
  * Caches provider documents (discovery, key sets) in the application's cache
- * store, with a copy per process so one request reads the store once.
+ * store, with a copy per process that is trusted for at most
+ * {@see self::LOCAL_SECONDS} before the store is read again. A long-lived
+ * worker (Octane, a queue worker) therefore sees {@see self::forget()} from
+ * another process within seconds, not when its copy would go stale.
  *
  * Freshness is decided by the package clock. When a refetch of a stale
  * document fails because the provider is unavailable, the stale copy is used
@@ -23,8 +26,14 @@ use Psr\Clock\ClockInterface;
  */
 final class DocumentCache
 {
+    /** How long this process trusts its copy before it reads the store again. */
+    public const int LOCAL_SECONDS = 5;
+
     /** @var array<string, CachedDocument> */
     private array $memo = [];
+
+    /** @var array<string, int> when the store was last read for each key */
+    private array $checkedAt = [];
 
     public function __construct(
         private readonly Repository $store,
@@ -41,15 +50,21 @@ final class DocumentCache
     {
         $now = $this->clock->now()->getTimestamp();
         $cached = $this->memo[$key] ?? null;
+        $checkedRecently = $now - ($this->checkedAt[$key] ?? PHP_INT_MIN) < self::LOCAL_SECONDS;
 
-        if (! $refresh && $cached instanceof CachedDocument && $now < $cached->freshUntil) {
+        if (! $refresh && $checkedRecently && $cached instanceof CachedDocument && $now < $cached->freshUntil) {
             return $cached->body;
         }
 
-        // Another process may have fetched a newer copy into the store.
+        // Another process may have fetched a newer copy into the store, or
+        // forgotten it: the store decides.
         $stored = CachedDocument::fromCache($this->store->get($key));
+        $this->checkedAt[$key] = $now;
 
-        if ($stored instanceof CachedDocument && (! $cached instanceof CachedDocument || $stored->fetchedAt >= $cached->fetchedAt)) {
+        if (! $stored instanceof CachedDocument) {
+            unset($this->memo[$key]);
+            $cached = null;
+        } elseif (! $cached instanceof CachedDocument || $stored->fetchedAt >= $cached->fetchedAt) {
             $cached = $this->memo[$key] = $stored;
         }
 
@@ -77,6 +92,7 @@ final class DocumentCache
         }
 
         $this->memo[$key] = $document;
+        $this->checkedAt[$key] = $now;
 
         return $document->body;
     }
@@ -87,7 +103,7 @@ final class DocumentCache
      */
     public function forgetLocal(string $key): void
     {
-        unset($this->memo[$key]);
+        unset($this->memo[$key], $this->checkedAt[$key]);
     }
 
     /**
@@ -99,9 +115,13 @@ final class DocumentCache
         return $this->store->add($key, $this->clock->now()->getTimestamp(), $seconds);
     }
 
+    /**
+     * Drops the document from the store and from this process. Other
+     * processes stop using their copy within {@see self::LOCAL_SECONDS}.
+     */
     public function forget(string $key): void
     {
-        unset($this->memo[$key]);
+        unset($this->memo[$key], $this->checkedAt[$key]);
         $this->store->forget($key);
     }
 }
