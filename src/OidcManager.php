@@ -33,6 +33,8 @@ use SensitiveParameter;
  * The services are resolved on each call, so an application that has not
  * configured the package yet keeps booting, and a long-running worker always
  * sees the current request.
+ *
+ * @internal Not part of the public API; it may change in any release.
  */
 final readonly class OidcManager implements OidcClient
 {

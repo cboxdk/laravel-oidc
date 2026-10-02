@@ -37,6 +37,8 @@ use Throwable;
  *
  * Header members that carry or point to a key (jwk, jku, x5u, x5c) are never
  * consulted: keys come from the provider's key set only.
+ *
+ * @internal Not part of the public API; it may change in any release.
  */
 final readonly class KeySelector
 {

@@ -27,6 +27,8 @@ use Psr\Clock\ClockInterface;
  * The audience is bound to where the assertion goes, so a provider that
  * names another party's URL as one of its endpoints never receives an
  * assertion that party accepts.
+ *
+ * @internal Not part of the public API; it may change in any release.
  */
 final readonly class ClientAssertion
 {

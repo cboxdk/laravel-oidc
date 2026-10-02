@@ -21,6 +21,8 @@ use SensitiveParameter;
  * - private_key_jwt: client_id, client_assertion_type and a fresh
  *   client_assertion in the form, whose audience is $url (or the issuer);
  * - none: client_id in the form, for a public client.
+ *
+ * @internal Not part of the public API; it may change in any release.
  */
 final readonly class ClientAuthentication
 {

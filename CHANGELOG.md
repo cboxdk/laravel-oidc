@@ -284,3 +284,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   || ^3.0`, `guzzlehttp/guzzle` `^7.15.2 || ^8.0` and Pest `^4.3.2 || ^5.0`,
   and `paragonie/random_compat` below 9.99 and `spomky-labs/pki-framework`
   below 1.2.2 are refused.
+- **A stated public API.** `docs/index.md` lists what semantic versioning
+  covers. `ClientAssertion`, `ClientAuthentication`, `KeySelector`,
+  `TokenEndpoint`, `OidcManager`, `Pkce` and `CheckConnectionCommand` are now
+  `@internal`, and a docs check refuses a sample that uses an internal class.

@@ -17,6 +17,8 @@ use Illuminate\Console\Command;
  * Fetches the discovery document and the key set of a connection afresh and
  * prints what works and what does not, each problem with its fix. Exits 1
  * when a check fails.
+ *
+ * @internal Not part of the public API; it may change in any release.
  */
 final class CheckConnectionCommand extends Command
 {

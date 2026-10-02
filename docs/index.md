@@ -42,6 +42,25 @@ ship, with the users table and the failures of normal use handled.
 - The `Oidc` facade is the front; `Oidc::fake()` replaces it in your tests,
   and `php artisan oidc:check` tells you whether a connection works.
 
+## The public API
+
+What [semantic versioning](https://semver.org) covers from the first release:
+
+- the `Oidc` facade, the `Contracts\OidcClient` contract behind it and the
+  `OidcConnection` its `connection()` returns, and `Testing\OidcFake`;
+- the extension contracts `Contracts\HttpClient` and
+  `Contracts\TransactionStore`, with their default implementations;
+- the configuration objects in `Config`, the results and value objects
+  (`VerifiedClaims`, `CallbackResult`, `TokenSet`, `RefreshResult`,
+  `UserInfo`, `LogoutToken`, the `AuthorizationOptions` and `LogoutOptions`
+  and their requests), the exceptions with `ErrorCode`, and the
+  `BackChannelLogoutReceived` event;
+- the services named on [the facade page](core-concepts/the-oidc-facade.md#the-services-underneath),
+  `SigningKeys`, `ConnectionDiagnostics`, the `oidc:check` command and the
+  back-channel logout route.
+
+Everything marked `@internal` may change in any release.
+
 ## Read next
 
 - [Requirements](requirements.md): PHP, Laravel and extensions

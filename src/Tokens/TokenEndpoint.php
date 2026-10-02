@@ -27,6 +27,8 @@ use SensitiveParameter;
  * token_type of Bearer (in any case); a code exchange must also return an
  * id_token. An OAuth error answer is {@see TokenRequestRejected}, with its
  * error code only.
+ *
+ * @internal Not part of the public API; it may change in any release.
  */
 final readonly class TokenEndpoint
 {

@@ -175,3 +175,20 @@ it('links only to files and headings that exist', function (): void {
 
     expect($broken)->toBe([]);
 });
+
+it('shows no internal class in a sample', function (): void {
+    $internal = [];
+
+    foreach (DocExamples::blocks() as $block) {
+        preg_match_all('/Cbox\\\\Oidc\\\\[A-Za-z\\\\]+/', $block['code'], $names);
+
+        foreach (array_unique($names[0]) as $name) {
+            if ((class_exists($name) || interface_exists($name) || trait_exists($name) || enum_exists($name))
+                && str_contains((string) new ReflectionClass($name)->getDocComment(), '@internal')) {
+                $internal[] = sprintf('%s:%d uses %s', $block['file'], $block['line'], $name);
+            }
+        }
+    }
+
+    expect($internal)->toBe([]);
+});

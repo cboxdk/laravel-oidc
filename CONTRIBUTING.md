@@ -20,7 +20,9 @@ issue.
 - New behaviour needs tests. A bug fix needs a regression test that fails
   without the fix.
 - A change to the public API updates the documentation in `docs/` and the
-  [changelog](CHANGELOG.md) in the same pull request.
+  [changelog](CHANGELOG.md) in the same pull request. The public API is what
+  [docs/index.md](docs/index.md#the-public-api) lists; a class that is not part
+  of it carries `@internal`, and no documentation sample may use one.
 - No `@phpstan-ignore`, no baseline, and no loosened checks to make a build pass.
 - Cryptography and token parsing stay in `web-token/jwt-library`. Do not
   hand-write signature checks, key parsing or base64url JSON decoding of tokens.
