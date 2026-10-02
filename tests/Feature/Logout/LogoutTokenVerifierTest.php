@@ -15,6 +15,7 @@ use Cbox\Oidc\Tests\Support\Refusals;
 use Cbox\Oidc\Tokens\IdTokenExpectations;
 use Cbox\Oidc\Tokens\IdTokenVerifier;
 use Cbox\Oidc\Tokens\SigningAlgorithm;
+use Cbox\Oidc\Tokens\VerifiedClaims;
 use Jose\Component\Core\AlgorithmManager;
 use Jose\Component\Core\JWK;
 use Jose\Component\Signature\Algorithm\HS256;
@@ -82,6 +83,16 @@ describe('a valid logout token', function (): void {
             ->and($bySubject->matches($signedIn(['sub' => 'user-2'])))->toBeFalse()
             ->and($byBoth->matches($signedIn(['sid' => 'session-1'])))->toBeTrue()
             ->and($byBoth->matches($signedIn(['sid' => 'session-1', 'sub' => 'user-2'])))->toBeFalse();
+    });
+
+    it('never ends a session of another connection or issuer, whatever its sid and subject', function (): void {
+        $token = ($this->verify)(($this->token)());
+        $verifier = resolve(IdTokenVerifier::class);
+        $signedIn = $verifier->verify('main', $this->provider->idToken(['sid' => 'session-1']), new IdTokenExpectations('nonce-1'));
+
+        expect($token->matches($signedIn))->toBeTrue()
+            ->and($token->matches(new VerifiedClaims(...[...get_object_vars($signedIn), 'connection' => 'workspace'])))->toBeFalse()
+            ->and($token->matches(new VerifiedClaims(...[...get_object_vars($signedIn), 'issuer' => 'https://other.example.test'])))->toBeFalse();
     });
 });
 

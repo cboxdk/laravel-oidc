@@ -83,3 +83,23 @@ jobs:
         with:
           name: sbom-cyclonedx
           path: sbom.json
+
+  # Line coverage of src, held at 99% so a security branch without a test
+  # cannot slip in unnoticed.
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    name: Coverage (PHP 8.4 · testbench ^11.0)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: "8.4"
+          extensions: openssl, sodium, gmp
+          coverage: pcov
+          tools: composer:v2
+      - name: Pin the Laravel major
+        run: composer require "orchestra/testbench:^11.0" --dev --no-update --no-interaction
+      - run: composer update --no-interaction --no-progress --prefer-dist
+      - name: Pest with coverage
+        run: composer test:coverage

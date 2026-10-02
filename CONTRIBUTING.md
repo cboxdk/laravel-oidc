@@ -9,7 +9,9 @@ issue.
 1. Fork the repository and branch from `main`.
 2. Make the change, with tests.
 3. Run `composer qa`: Pint, Rector, PHPStan at level max, the Pest suites, the
-   license check and `composer audit`. Every step must pass.
+   license check and `composer audit`. Every step must pass. With PCOV or
+   Xdebug installed, `composer test:coverage` also holds line coverage of
+   `src` at 99%, as CI does.
 4. Open a pull request that explains why the change is needed, not only what it
    does.
 

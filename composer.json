@@ -73,6 +73,7 @@
         "rector:check": "rector process --dry-run",
         "analyse": "phpstan analyse --no-progress --memory-limit=1G",
         "test": "pest",
+        "test:coverage": "pest --coverage --min=99",
         "license-check": "@php bin/check-licenses.php",
         "sbom": "@php bin/generate-sbom.php",
         "qa": [
@@ -91,6 +92,7 @@
         "rector:check": "Fail if Rector would change a file.",
         "analyse": "Run PHPStan (Larastan) at level max.",
         "test": "Run the Pest suites.",
+        "test:coverage": "Run the Pest suites with line coverage (needs PCOV or Xdebug) and fail below 99%.",
         "license-check": "Fail if any dependency is not permissively licensed (SBOM/compliance gate).",
         "sbom": "Generate a CycloneDX 1.5 SBOM (sbom.json) from composer.lock.",
         "qa": "Run the full quality gate: lint, Rector, static analysis, tests, license check, security audit."

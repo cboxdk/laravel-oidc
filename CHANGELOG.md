@@ -265,3 +265,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Missing values name their variable.** A missing `issuer`, `client_id`,
   `client_secret` or `redirect_uri` of the connection `main` now says which
   `.env` variable to set (`OIDC_ISSUER` and so on).
+- **Tests for the security branches the suite missed, and a coverage gate.**
+  A refresh that renews a login of another connection or issuer, a logout
+  token of another connection or issuer, and the redaction of
+  `IdTokenExpectations` now have tests; CI holds line coverage of `src` at
+  99% (`composer test:coverage`).

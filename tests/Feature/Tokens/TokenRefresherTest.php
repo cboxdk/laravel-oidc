@@ -203,6 +203,40 @@ describe('the ID token a refresh returns', function (): void {
         'a wrong at_hash' => [['at_hash' => 'AAAAAAAAAAAAAAAAAAAAAA'], ErrorCode::IdTokenAtHashMismatch, 'at_hash'],
     ]);
 
+    it('must renew a login of the same connection', function (): void {
+        // One provider behind two connections: a login of main may not be
+        // renewed as one of the other.
+        Refusals::useConnection('second', ConnectionFixtures::minimal(['redirect_uri' => 'https://app.example.test/oidc/second/callback']));
+        $token = $this->provider->idToken(['auth_time' => $this->now - 100]);
+
+        Refusals::assert(
+            fn () => resolve(IdTokenVerifier::class)->verify('second', $token, IdTokenExpectations::forRefresh($this->original)),
+            ErrorCode::RefreshedIdTokenMismatch,
+            TokenRejected::class,
+            'renews a login of connection "main"',
+            'iss',
+        );
+    });
+
+    it('must name the issuer of the login it renews, also where a tenant template allows another', function (): void {
+        $tenantOne = '11111111-1111-1111-1111-111111111111';
+        $tenantTwo = '22222222-2222-2222-2222-222222222222';
+        $entra = FakeProvider::entra()->install();
+        Refusals::useConnection('entra', [...ConnectionFixtures::entraMultiTenant(), 'client_id' => 'client-1', 'client_secret' => 'secret-1', 'algorithms' => ['RS256']]);
+        $original = ($this->login)(['tid' => $tenantOne], 'entra', $entra);
+
+        // Both tenants are allowed, so the token passes every other rule.
+        $entra->refreshClaims = ['tid' => $tenantTwo, 'iss' => 'https://login.microsoftonline.com/'.$tenantTwo.'/v2.0'];
+
+        Refusals::assert(
+            fn () => resolve(TokenRefresher::class)->refresh($original, $entra->issueRefreshToken($original->claims)),
+            ErrorCode::RefreshedIdTokenMismatch,
+            TokenRejected::class,
+            'names the issuer "https://login.microsoftonline.com/'.$tenantTwo.'/v2.0", but the login it renews was issued by "https://login.microsoftonline.com/'.$tenantOne.'/v2.0"',
+            'iss',
+        );
+    });
+
     it('must name the same tenant', function (): void {
         Refusals::useConnection('workspace', [...ConnectionFixtures::google(), 'tenant' => ['claim' => 'hd', 'allowed' => ['example.com', 'example.org']]]);
         $google = new FakeProvider('https://accounts.google.com')->install();
