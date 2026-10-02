@@ -12,29 +12,31 @@ declare(strict_types=1);
  *   php bin/generate-sbom.php --dev --output=sbom-dev.json
  */
 $root = dirname(__DIR__);
-$lock = json_decode((string) file_get_contents($root.'/composer.lock'), true, 512, JSON_THROW_ON_ERROR);
-$self = json_decode((string) file_get_contents($root.'/composer.json'), true, 512, JSON_THROW_ON_ERROR);
+$lock = readJson($root.'/composer.lock');
+$self = readJson($root.'/composer.json');
+$selfName = is_string($self['name'] ?? null) ? $self['name'] : 'unknown/package';
+$arguments = array_values(array_filter(is_array($GLOBALS['argv'] ?? null) ? $GLOBALS['argv'] : [], is_string(...)));
 
-$includeDev = in_array('--dev', $argv, true);
+$includeDev = in_array('--dev', $arguments, true);
 $output = $root.'/sbom.json';
-foreach ($argv as $arg) {
+foreach ($arguments as $arg) {
     if (str_starts_with($arg, '--output=')) {
         $output = substr($arg, strlen('--output='));
     }
 }
 
-$packages = $lock['packages'] ?? [];
+$packages = lockedPackages($lock, 'packages');
 if ($includeDev) {
-    $packages = array_merge($packages, $lock['packages-dev'] ?? []);
+    $packages = [...$packages, ...lockedPackages($lock, 'packages-dev')];
 }
 
-usort($packages, static fn (array $a, array $b): int => strcmp((string) $a['name'], (string) $b['name']));
+usort($packages, static fn (array $a, array $b): int => strcmp(stringOf($a['name'] ?? null), stringOf($b['name'] ?? null)));
 
 $components = array_map(componentFor(...), $packages);
 
 // Namespaced by this package's own name, so two cboxdk packages that happen to
 // resolve the same dependency set still get distinct serial numbers.
-$serial = 'urn:uuid:'.deterministicUuid((string) $self['name'], implode('|', array_column($components, 'purl')));
+$serial = 'urn:uuid:'.deterministicUuid($selfName, implode('|', array_map(static fn (array $component): string => $component['purl'], $components)));
 
 $bom = [
     'bomFormat' => 'CycloneDX',
@@ -46,14 +48,14 @@ $bom = [
             'vendor' => 'cboxdk',
             // Derived from the package rather than hard-coded, so a copy of this
             // script into a sibling package cannot keep claiming the wrong producer.
-            'name' => basename((string) $self['name']).'-sbom',
+            'name' => basename($selfName).'-sbom',
             'version' => '1.0.0',
         ]],
         'component' => [
             'type' => 'library',
-            'bom-ref' => (string) $self['name'],
-            'name' => (string) $self['name'],
-            'purl' => 'pkg:composer/'.$self['name'],
+            'bom-ref' => $selfName,
+            'name' => $selfName,
+            'purl' => 'pkg:composer/'.$selfName,
         ],
     ],
     'components' => $components,
@@ -67,13 +69,43 @@ file_put_contents(
 printf("Wrote %s: %d components (%s).\n", $output, count($components), $includeDev ? 'production + dev' : 'production');
 
 /**
- * @param  array<string, mixed>  $package
- * @return array<string, mixed>
+ * The decoded JSON object of $path, or an empty array.
+ *
+ * @return array<array-key, mixed>
+ */
+function readJson(string $path): array
+{
+    $value = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+
+    return is_array($value) ? $value : [];
+}
+
+/**
+ * The packages of a composer.lock section, each an array.
+ *
+ * @param  array<array-key, mixed>  $lock
+ * @return list<array<array-key, mixed>>
+ */
+function lockedPackages(array $lock, string $section): array
+{
+    $packages = is_array($lock[$section] ?? null) ? $lock[$section] : [];
+
+    return array_values(array_filter($packages, is_array(...)));
+}
+
+function stringOf(mixed $value, string $default = ''): string
+{
+    return is_string($value) ? $value : $default;
+}
+
+/**
+ * @param  array<array-key, mixed>  $package
+ * @return array{type: string, bom-ref: string, group: string, name: string, version: string, purl: string, description?: string, licenses?: list<array<string, mixed>>, hashes?: list<array{alg: string, content: string}>}
  */
 function componentFor(array $package): array
 {
-    $name = (string) $package['name'];
-    $version = (string) ($package['version'] ?? '0.0.0');
+    $name = stringOf($package['name'] ?? null);
+    $version = stringOf($package['version'] ?? null, '0.0.0');
     $purl = 'pkg:composer/'.$name.'@'.$version;
     [$group, $short] = array_pad(explode('/', $name, 2), 2, $name);
 
@@ -95,7 +127,8 @@ function componentFor(array $package): array
         $component['licenses'] = $licenses;
     }
 
-    $shasum = $package['dist']['shasum'] ?? '';
+    $dist = is_array($package['dist'] ?? null) ? $package['dist'] : [];
+    $shasum = $dist['shasum'] ?? '';
     if (is_string($shasum) && $shasum !== '') {
         $component['hashes'] = [['alg' => 'SHA-1', 'content' => $shasum]];
     }
@@ -104,10 +137,9 @@ function componentFor(array $package): array
 }
 
 /**
- * @param  list<string>|string  $license
  * @return list<array<string, mixed>>
  */
-function licenseEntries(array|string $license): array
+function licenseEntries(mixed $license): array
 {
     $items = array_values(array_filter(is_array($license) ? $license : [$license], is_string(...)));
 

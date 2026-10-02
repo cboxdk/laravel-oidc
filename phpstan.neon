@@ -5,4 +5,9 @@ parameters:
     level: max
     paths:
         - src
+        - config
+        - bin
         - tests/Fixtures
+    # The package's own config directory, where env() belongs.
+    configDirectories:
+        - %currentWorkingDirectory%/config

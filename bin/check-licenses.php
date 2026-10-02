@@ -15,10 +15,17 @@ const ALLOWED = [
     'Apache-2.0', 'Apache2', 'BSL-1.0', 'Zlib', 'PHP-3.01',
 ];
 
-/** Packages permitted despite a missing/odd license field, with justification. */
-const EXCEPTIONS = [
-    // e.g. 'vendor/pkg' => 'public domain, confirmed upstream',
-];
+/**
+ * Packages permitted despite a missing/odd license field, with justification.
+ *
+ * @return array<string, string>
+ */
+function licenseExceptions(): array
+{
+    return [
+        // e.g. 'vendor/pkg' => 'public domain, confirmed upstream',
+    ];
+}
 
 $lockPath = __DIR__.'/../composer.lock';
 
@@ -28,22 +35,23 @@ if (! is_file($lockPath)) {
 }
 
 $lock = json_decode((string) file_get_contents($lockPath), true, 512, JSON_THROW_ON_ERROR);
+$arguments = is_array($GLOBALS['argv'] ?? null) ? $GLOBALS['argv'] : [];
 
-$includeDev = in_array('--dev', $argv, true);
-$packages = $lock['packages'] ?? [];
+$includeDev = in_array('--dev', $arguments, true);
+$packages = packagesInLock($lock, 'packages');
 
 if ($includeDev) {
-    $packages = array_merge($packages, $lock['packages-dev'] ?? []);
+    $packages = [...$packages, ...packagesInLock($lock, 'packages-dev')];
 }
 
 $violations = [];
 $checked = 0;
 
 foreach ($packages as $package) {
-    $name = (string) ($package['name'] ?? '?');
+    $name = is_string($package['name'] ?? null) ? $package['name'] : '?';
     $checked++;
 
-    if (isset(EXCEPTIONS[$name])) {
+    if (array_key_exists($name, licenseExceptions())) {
         continue;
     }
 
@@ -63,19 +71,30 @@ foreach ($packages as $package) {
 }
 
 /**
+ * The packages of a composer.lock section, each an array.
+ *
+ * @return list<array<array-key, mixed>>
+ */
+function packagesInLock(mixed $lock, string $section): array
+{
+    $packages = is_array($lock) && is_array($lock[$section] ?? null) ? $lock[$section] : [];
+
+    return array_values(array_filter($packages, is_array(...)));
+}
+
+/**
  * Flatten a composer license field into individual SPDX identifiers, splitting
  * disjunctive/conjunctive expressions ("MIT OR GPL-2.0", "(MIT AND BSD)").
  *
- * @param  list<string>|string  $license
  * @return list<string>
  */
-function normalizeLicenses(array|string $license): array
+function normalizeLicenses(mixed $license): array
 {
-    $items = is_array($license) ? $license : [$license];
+    $items = is_array($license) ? array_filter($license, is_string(...)) : (is_string($license) ? [$license] : []);
     $out = [];
 
     foreach ($items as $item) {
-        foreach (preg_split('/\s+(?:OR|AND)\s+/i', trim((string) $item)) ?: [] as $part) {
+        foreach (preg_split('/\s+(?:OR|AND)\s+/i', trim($item)) ?: [] as $part) {
             $part = trim($part, " \t()");
             if ($part !== '') {
                 $out[] = $part;
@@ -94,7 +113,7 @@ if ($violations !== []) {
         fwrite(STDERR, sprintf("  %-45s %s\n", $name, $license));
     }
     fwrite(STDERR, "\nAllowed: ".implode(', ', ALLOWED)."\n");
-    fwrite(STDERR, "If a flagged package is genuinely fine, add it to EXCEPTIONS with a reason.\n");
+    fwrite(STDERR, "If a flagged package is genuinely fine, add it to licenseExceptions() with a reason.\n");
     exit(1);
 }
 

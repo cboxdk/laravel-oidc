@@ -275,3 +275,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that cannot run outside this repository into every application's
   `vendor/bin`, and `bin/` is left out of the dist archive. They still run as
   `composer license-check` and `composer sbom`.
+- **PHPStan covers the shipped config and the scripts.** `config/oidc.php`
+  and the license and SBOM scripts in `bin/` are analysed at level max too;
+  the scripts now narrow what they read from `composer.lock`.

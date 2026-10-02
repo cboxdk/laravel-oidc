@@ -86,7 +86,7 @@
         "format": "Fix code style with Pint.",
         "rector": "Apply the Rector rules.",
         "rector:check": "Fail if Rector would change a file.",
-        "analyse": "Run PHPStan (Larastan) at level max.",
+        "analyse": "Run PHPStan (Larastan) at level max over src, config, bin and the test fixtures.",
         "test": "Run the Pest suites.",
         "test:coverage": "Run the Pest suites with line coverage (needs PCOV or Xdebug) and fail below 99%.",
         "license-check": "Fail if any dependency is not permissively licensed (SBOM/compliance gate).",
