@@ -36,6 +36,12 @@ Registered through package auto-discovery, so no manual provider wiring.
 |---|---|---|
 | `web-token/jwt-library` | `^4.2.3` | JWK and JWKS parsing, signature verification and claim checks. 4.2.3 includes the fixes for the June 2026 advisories. |
 | `cboxdk/laravel-ssrf` | `^1.5` | Guards every outbound call to a provider. |
-| `guzzlehttp/guzzle` | `^7.8.2 \|\| ^8.0` | The transport under Laravel's HTTP client; the size limit uses its `on_headers` and `progress` options. |
+| `guzzlehttp/guzzle` | `^7.15.2 \|\| ^8.0` | The transport under Laravel's HTTP client; the size limit uses its `on_headers` and `progress` options. |
 | `psr/clock` | `^1.0` | Time comes from a PSR-20 clock, so tests can freeze it. |
-| `psr/log` | `^1.1 \|\| ^2.0 \|\| ^3.0` | The back-channel logout route logs refused logout tokens. |
+| `psr/log` | `^2.0 \|\| ^3.0` | The back-channel logout route logs refused logout tokens. |
+
+`composer.json` also refuses two old transitive versions: `paragonie/random_compat`
+below 9.99, whose PHP 5 polyfill of `random_bytes()` loses its types, and
+`spomky-labs/pki-framework` below 1.2.2, which raises deprecations on PHP 8.4.
+CI installs the lowest versions these constraints allow, as well as the
+newest.

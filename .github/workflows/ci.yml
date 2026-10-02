@@ -25,7 +25,14 @@ jobs:
         php: ["8.4", "8.5"]
         # Laravel 12 (testbench 10) and Laravel 13 (testbench 11).
         testbench: ["^10.0", "^11.0"]
-    name: PHP ${{ matrix.php }} · testbench ${{ matrix.testbench }}
+        # prefer-lowest installs the lowest versions composer.json allows, so
+        # the declared floors are tested, not only promised.
+        stability: [prefer-lowest, prefer-stable]
+        exclude:
+          # The lowest versions predate PHP 8.5, as in the sibling packages.
+          - php: "8.5"
+            stability: prefer-lowest
+    name: PHP ${{ matrix.php }} · testbench ${{ matrix.testbench }} · ${{ matrix.stability }}
     steps:
       # Actions are pinned to commit SHAs, with the tag as a comment; Dependabot
       # keeps them current.
@@ -38,7 +45,7 @@ jobs:
           tools: composer:v2
       - name: Pin the Laravel major
         run: composer require "orchestra/testbench:${{ matrix.testbench }}" --dev --no-update --no-interaction
-      - run: composer update --no-interaction --no-progress --prefer-dist
+      - run: composer update --${{ matrix.stability }} --no-interaction --no-progress --prefer-dist
       - name: composer validate
         run: composer validate --strict
       - name: Pint (lint)
@@ -56,14 +63,14 @@ jobs:
       # The SBOM is derived from composer.lock, which differs per Laravel major,
       # so it is only generated on the canonical cell (latest major).
       - name: SBOM
-        if: matrix.php == '8.4' && matrix.testbench == '^11.0'
+        if: matrix.php == '8.4' && matrix.testbench == '^11.0' && matrix.stability == 'prefer-stable'
         run: composer sbom
       # composer.lock is not committed (this is a library), so CI resolves fresh
       # and picks up upstream patch releases. Compare the dependency SET, not the
       # versions: a dependency added or removed without regenerating sbom.json
       # fails a release tag; patch drift does not.
       - name: SBOM dependency set is up to date (release tags)
-        if: matrix.php == '8.4' && matrix.testbench == '^11.0' && startsWith(github.ref, 'refs/tags/')
+        if: matrix.php == '8.4' && matrix.testbench == '^11.0' && matrix.stability == 'prefer-stable' && startsWith(github.ref, 'refs/tags/')
         run: |
           git show HEAD:sbom.json > /tmp/sbom-committed.json
           jq -r '[.components[].name] | sort | .[]' /tmp/sbom-committed.json > /tmp/set-committed.txt
@@ -73,12 +80,12 @@ jobs:
             exit 1
           fi
       - name: SBOM drift (informational)
-        if: matrix.php == '8.4' && matrix.testbench == '^11.0' && !startsWith(github.ref, 'refs/tags/')
+        if: matrix.php == '8.4' && matrix.testbench == '^11.0' && matrix.stability == 'prefer-stable' && !startsWith(github.ref, 'refs/tags/')
         run: |
           git diff --quiet sbom.json \
             || echo "::notice::sbom.json drifted from the current resolve (usually an upstream patch release). Run 'composer sbom' before the next tag."
       - name: Upload SBOM
-        if: matrix.php == '8.4' && matrix.testbench == '^11.0'
+        if: matrix.php == '8.4' && matrix.testbench == '^11.0' && matrix.stability == 'prefer-stable'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom-cyclonedx

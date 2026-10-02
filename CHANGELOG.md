@@ -278,3 +278,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **PHPStan covers the shipped config and the scripts.** `config/oidc.php`
   and the license and SBOM scripts in `bin/` are analysed at level max too;
   the scripts now narrow what they read from `composer.lock`.
+- **The declared floors are tested.** CI now runs with `--prefer-lowest` as
+  well as the newest versions (PHP 8.4, Laravel 12 and 13), and PHPUnit fails
+  on deprecations. The floors are what such a run installs: `psr/log` `^2.0
+  || ^3.0`, `guzzlehttp/guzzle` `^7.15.2 || ^8.0` and Pest `^4.3.2 || ^5.0`,
+  and `paragonie/random_compat` below 9.99 and `spomky-labs/pki-framework`
+  below 1.2.2 are refused.

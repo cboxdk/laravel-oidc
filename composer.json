@@ -30,14 +30,14 @@
         "ext-openssl": "*",
         "ext-sodium": "*",
         "cboxdk/laravel-ssrf": "^1.5",
-        "guzzlehttp/guzzle": "^7.8.2 || ^8.0",
+        "guzzlehttp/guzzle": "^7.15.2 || ^8.0",
         "illuminate/console": "^12.0 || ^13.0",
         "illuminate/contracts": "^12.0 || ^13.0",
         "illuminate/http": "^12.0 || ^13.0",
         "illuminate/routing": "^12.0 || ^13.0",
         "illuminate/support": "^12.0 || ^13.0",
         "psr/clock": "^1.0",
-        "psr/log": "^1.1 || ^2.0 || ^3.0",
+        "psr/log": "^2.0 || ^3.0",
         "web-token/jwt-library": "^4.2.3"
     },
     "suggest": {
@@ -49,8 +49,12 @@
         "larastan/larastan": "^3.12",
         "laravel/pint": "^1.32",
         "orchestra/testbench": "^10.0 || ^11.0",
-        "pestphp/pest": "^4.0 || ^5.0",
+        "pestphp/pest": "^4.3.2 || ^5.0",
         "rector/rector": "^2.6"
+    },
+    "conflict": {
+        "paragonie/random_compat": "<9.99",
+        "spomky-labs/pki-framework": "<1.2.2"
     },
     "autoload": {
         "psr-4": {
