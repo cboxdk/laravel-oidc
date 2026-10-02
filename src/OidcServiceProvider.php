@@ -11,8 +11,11 @@ use Cbox\Oidc\Config\CacheConfig;
 use Cbox\Oidc\Config\FlowConfig;
 use Cbox\Oidc\Config\HttpConfig;
 use Cbox\Oidc\Config\OidcConfig;
+use Cbox\Oidc\Console\CheckConnectionCommand;
 use Cbox\Oidc\Contracts\HttpClient;
+use Cbox\Oidc\Contracts\OidcClient;
 use Cbox\Oidc\Contracts\TransactionStore;
+use Cbox\Oidc\Diagnostics\ConnectionDiagnostics;
 use Cbox\Oidc\Discovery\MetadataRepository;
 use Cbox\Oidc\Flow\AuthorizationFlow;
 use Cbox\Oidc\Flow\SessionTransactionStore;
@@ -96,6 +99,9 @@ class OidcServiceProvider extends ServiceProvider
             $app->make(CacheFactory::class)->store($app->make(CacheConfig::class)->store),
             $app->make(ClockInterface::class),
         ));
+
+        $this->app->singleton(ConnectionDiagnostics::class);
+        $this->app->singleton(OidcClient::class, OidcManager::class);
     }
 
     public function boot(): void
@@ -103,6 +109,10 @@ class OidcServiceProvider extends ServiceProvider
         $this->publishes([__DIR__.'/../config/oidc.php' => $this->app->configPath('oidc.php')], 'oidc-config');
 
         $this->registerRouteMacros();
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([CheckConnectionCommand::class]);
+        }
     }
 
     /**

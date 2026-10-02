@@ -19,13 +19,14 @@ page only explains it.
 | `ext-sodium` | any | EdDSA (Ed25519) signatures. |
 
 `ext-gmp` (or `ext-bcmath`) is suggested: it speeds up the big-number arithmetic
-behind key handling.
+behind key handling. `phpunit/phpunit` is suggested for the assertions of
+`Oidc::fake()`; Pest installs it.
 
 ## Framework
 
 | Requirement | Version |
 |---|---|
-| Laravel (`illuminate/contracts`, `illuminate/http`, `illuminate/routing`, `illuminate/support`) | `^12.0 \|\| ^13.0` |
+| Laravel (`illuminate/console`, `illuminate/contracts`, `illuminate/http`, `illuminate/routing`, `illuminate/support`) | `^12.0 \|\| ^13.0` |
 
 Registered through package auto-discovery, so no manual provider wiring.
 

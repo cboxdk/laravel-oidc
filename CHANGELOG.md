@@ -150,6 +150,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`oidc_endpoint_not_supported`), and each service has `supported()`. A
   malformed token or scope passed to a method fails with `InvalidArgument`
   (`oidc_argument_invalid`).
+- **The `Oidc` facade and the `OidcClient` contract.** One entry point for an
+  application: `Oidc::redirect()`, `Oidc::callback()`, `Oidc::refresh()`,
+  `Oidc::userInfo()`, `Oidc::logout()` and `Oidc::revoke()`, each taking the
+  connection by name, and `Oidc::connection('google')` for the same calls bound
+  to one connection. Type-hint `Cbox\Oidc\Contracts\OidcClient` in a
+  controller to get the same. `callback()` reads the current request when none
+  is passed. The services behind it stay public for the less common calls.
+- **`Oidc::fake()` for your tests.** Swaps the client for `Testing\OidcFake`:
+  queue outcomes with `signIn()`, `denySignIn()` and `failSignIn()`, fail
+  refreshes with `failRefresh()`, add userinfo claims with `withUserInfo()`,
+  and run your back-channel logout listener with `backChannelLogout()`. The
+  results have the real types; refresh tokens rotate, and a used or revoked
+  one fails with `invalid_grant`. Its ID tokens are unsecured JWTs (`alg`
+  `none`) that no verifier accepts. Assertions: `assertRedirected`,
+  `assertSignedIn`, `assertNoPendingSignIns`, `assertRefreshed`,
+  `assertLoggedOut`, `assertRevoked` and their negations.
+- **`php artisan oidc:check`.** Fetches a connection's discovery document and
+  key set afresh, through the same client and SSRF guard as a login, and
+  prints what works and what does not: the configuration, the issuer match,
+  the common algorithms, the keys that may verify ID tokens, the userinfo,
+  logout and revocation endpoints, back-channel logout and the RFC 9207 `iss`
+  parameter. Each problem carries its error code and fix; `--all` checks every
+  connection, `--json` prints a machine-readable report, and the exit code is
+  1 when a check fails. The same checks are `Diagnostics\ConnectionDiagnostics`.
 
 ### Fixed
 
