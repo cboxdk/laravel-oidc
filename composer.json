@@ -52,10 +52,6 @@
         "pestphp/pest": "^4.0 || ^5.0",
         "rector/rector": "^2.6"
     },
-    "bin": [
-        "bin/check-licenses.php",
-        "bin/generate-sbom.php"
-    ],
     "autoload": {
         "psr-4": {
             "Cbox\\Oidc\\": "src/"

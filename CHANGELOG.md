@@ -270,3 +270,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   token of another connection or issuer, and the redaction of
   `IdTokenExpectations` now have tests; CI holds line coverage of `src` at
   99% (`composer test:coverage`).
+- **No scripts in consumers' `vendor/bin`.** `composer.json` no longer
+  declares the license and SBOM scripts as binaries, which put two scripts
+  that cannot run outside this repository into every application's
+  `vendor/bin`, and `bin/` is left out of the dist archive. They still run as
+  `composer license-check` and `composer sbom`.
