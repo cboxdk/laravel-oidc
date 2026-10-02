@@ -160,17 +160,23 @@ it('notes the optional endpoints a provider lacks', function (): void {
         ]);
 });
 
-it('warns about an http redirect URI on a public host and a tenant policy that accepts anyone', function (): void {
+it('warns about a tenant policy that accepts anyone', function (): void {
     config(['oidc.connections.main' => ConnectionFixtures::minimal([
-        'redirect_uri' => 'http://app.example.com/oidc/callback',
         'tenant' => ['claim' => 'org', 'allowed' => ['*']],
     ])]);
 
     $this->artisan('oidc:check')
-        ->expectsOutputToContain('WARN  redirect_uri   http://app.example.com/oidc/callback uses http on a host that is not local')
         ->expectsOutputToContain('WARN  tenant         Any value of the org claim is accepted')
-        ->expectsOutputToContain('Connection main can sign people in, with 2 warning(s).')
+        ->expectsOutputToContain('Connection main can sign people in, with 1 warning(s).')
         ->assertExitCode(0);
+});
+
+it('fails the configuration of an http redirect URI on a public host', function (): void {
+    config(['oidc.connections.main' => ConnectionFixtures::minimal(['redirect_uri' => 'http://app.example.com/oidc/callback'])]);
+
+    $this->artisan('oidc:check')
+        ->expectsOutputToContain('oidc.connections.main.redirect_uri uses http on a host that is not local')
+        ->assertExitCode(1);
 });
 
 it('accepts http on local hosts, and reports a pinned tenant', function (): void {

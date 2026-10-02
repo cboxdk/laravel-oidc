@@ -23,6 +23,10 @@ the class of report we most want.
 - Protocol parameters the package sets itself (`state`, `nonce`, the PKCE
   challenge, `redirect_uri` and others) cannot be overridden through
   `authorization_parameters`.
+- `redirect_uri` and `post_logout_redirect_uri` must be https, except on
+  `localhost`, a loopback address or a name below `.localhost` or `.test`, so
+  a code never crosses the network unencrypted (RFC 6749 3.1.2.1).
+- Two connections cannot share a `redirect_uri`.
 - The client secret is redacted when a connection is dumped.
 
 ## What the HTTP layer prevents
@@ -118,7 +122,8 @@ the class of report we most want.
 
 - **Open redirects.** The logout URL is built from the checked discovery
   document and passes the SSRF guard's redirect check; a
-  `post_logout_redirect_uri` must be an absolute http or https URL.
+  `post_logout_redirect_uri` must be an absolute https URL (http only on a
+  local host).
 - **Forged logout tokens.** A logout token passes the same form, `alg`, key,
   signature, `iss`, `aud` and lifetime rules as an ID token.
 - **An ID token used to sign its owner out.** A logout token must carry the

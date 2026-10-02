@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cbox\Oidc\Logout;
 
 use Cbox\Oidc\Exceptions\InvalidLogoutOptions;
+use Cbox\Oidc\Support\Url;
 use SensitiveParameter;
 
 /**
@@ -45,7 +46,7 @@ final readonly class LogoutOptions
         }
 
         if ($postLogoutRedirectUri !== null && ! $this->browserUrl($postLogoutRedirectUri)) {
-            throw InvalidLogoutOptions::option('postLogoutRedirectUri', 'is not an absolute http or https URL without user info or a fragment', 'Pass the full URL registered at the provider, or null to use the connection\'s post_logout_redirect_uri.');
+            throw InvalidLogoutOptions::option('postLogoutRedirectUri', 'is not an absolute https URL (http only on a local host) without user info or a fragment', 'Pass the full URL registered at the provider, or null to use the connection\'s post_logout_redirect_uri.');
         }
 
         if ($state !== null && preg_match('/^[\x20-\x7E]{1,512}$/D', $state) !== 1) {
@@ -82,9 +83,11 @@ final readonly class LogoutOptions
     {
         $parts = parse_url($url);
 
+        $scheme = strtolower($parts['scheme'] ?? '');
+
         return is_array($parts)
-            && in_array(strtolower($parts['scheme'] ?? ''), ['http', 'https'], true)
             && ($parts['host'] ?? '') !== ''
+            && ($scheme === 'https' || ($scheme === 'http' && Url::isLocalHost($parts['host'])))
             && ! isset($parts['user'])
             && ! isset($parts['pass'])
             && ! isset($parts['fragment']);

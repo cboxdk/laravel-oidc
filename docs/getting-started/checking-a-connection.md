@@ -39,7 +39,6 @@ from the cached copies. It prints one line per check, here for the connection of
 | Check | Fails or warns when |
 |---|---|
 | `configuration` | A value of `config/oidc.php` is invalid, or the connection is not configured. |
-| `redirect_uri` | Warns: the redirect URI is http on a host other than `localhost`, `127.0.0.1`, `*.localhost` or `*.test`. |
 | `client_assertion` | Warns: another connection signs its `private_key_jwt` assertions with the same key. |
 | `tenant` | Warns: the tenant policy accepts any tenant (`['*']`). |
 | `discovery` | The document cannot be fetched, names another issuer, or cannot work with the connection (no common algorithm, no PKCE S256, not the connection's client authentication). |

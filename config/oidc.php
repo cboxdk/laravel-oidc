@@ -62,7 +62,9 @@ return [
             ],
 
             // Where the provider sends the browser back after login. Register
-            // exactly this URL at the provider.
+            // exactly this URL at the provider. https, or http on localhost,
+            // a loopback address or a .localhost or .test name; each
+            // connection needs its own.
             'redirect_uri' => env('OIDC_REDIRECT_URI'),
 
             // Must contain openid. Add offline_access where the provider

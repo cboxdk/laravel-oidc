@@ -87,17 +87,6 @@ final readonly class ConnectionDiagnostics
     {
         $findings = [Finding::pass('configuration', sprintf('Issuer %s, client %s, client_auth %s.', $config->issuer, $config->clientId, $config->clientAuth->value))];
 
-        $scheme = parse_url($config->redirectUri, PHP_URL_SCHEME);
-        $host = parse_url($config->redirectUri, PHP_URL_HOST);
-
-        if ($scheme === 'http' && is_string($host) && ! $this->localHost($host)) {
-            $findings[] = Finding::warn(
-                'redirect_uri',
-                sprintf('%s uses http on a host that is not local; the code travels unencrypted, and most providers refuse it.', $config->redirectUri),
-                sprintf('Set oidc.connections.%s.redirect_uri to an https URL, and register that one at the provider.', $config->name),
-            );
-        }
-
         $sharing = $this->sharedAssertionKey($config, $all);
 
         if ($sharing !== []) {
@@ -240,12 +229,5 @@ final readonly class ConnectionDiagnostics
     private function algorithms(array $algorithms): string
     {
         return implode(', ', array_map(static fn (SigningAlgorithm $algorithm): string => $algorithm->value, $algorithms));
-    }
-
-    private function localHost(string $host): bool
-    {
-        return in_array(strtolower($host), ['localhost', '127.0.0.1', '[::1]'], true)
-            || str_ends_with(strtolower($host), '.localhost')
-            || str_ends_with(strtolower($host), '.test');
     }
 }

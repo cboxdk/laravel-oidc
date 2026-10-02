@@ -38,7 +38,7 @@ lists the configured names.
 | `client_secret` | `null` | Required for `client_secret_basic` and `client_secret_post`; dropped for the others. Redacted when the connection is dumped. |
 | `client_auth` | `client_secret_basic` | `client_secret_basic`, `client_secret_post`, `private_key_jwt` (see `client_assertion`) or `none` (public client, PKCE only). |
 | `client_assertion` | see below | Read only for `private_key_jwt`, and then required. |
-| `redirect_uri` | required | Absolute http or https URL. Register exactly this URL at the provider. |
+| `redirect_uri` | required | Absolute https URL; http only on `localhost`, a loopback address or a name below `.localhost` or `.test`. Register exactly this URL at the provider. Each connection needs its own (host and path). |
 | `scopes` | `openid profile email` | Must contain `openid`. Each is an RFC 6749 scope token. Duplicates are dropped. |
 | `algorithms` | `RS256 PS256 ES256 EdDSA` in the published file | Any of `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `ES512`, `EdDSA`. `none` and `HS*` are refused. |
 | `leeway_seconds` | `60` | 0 to 300. Clock skew allowed for `exp`, `nbf`, `iat` and `auth_time`. |
@@ -46,7 +46,7 @@ lists the configured names.
 | `max_age` | `null` | 0 to 31536000. Sent as `max_age`; `auth_time` then becomes required. |
 | `tenant` | `null` | `['claim' => ..., 'allowed' => [...]]`. The ID token's claim must be present and its value listed; `hd` and `tid` are compared without case, other claims exactly. `['*']` alone accepts any tenant. Required, on `tid`, when the issuer contains `{tenantid}`. See [tenants](../core-concepts/id-token-verification.md#tenants). |
 | `groups` | `['source' => 'id_token', 'claim' => 'groups']` | `source` is `id_token`, `userinfo` or `none`. The claim must be a list of strings. With `id_token`, Entra's group overage gives `groups` null. With `userinfo`, the login callback calls userinfo and takes the groups from there; see [refresh and userinfo](../core-concepts/refresh-and-userinfo.md#groups-from-userinfo). |
-| `post_logout_redirect_uri` | `null` | Absolute http or https URL. Sent on [RP-initiated logout](../core-concepts/logout.md#rp-initiated-logout) unless `LogoutOptions` names another. |
+| `post_logout_redirect_uri` | `null` | Absolute https URL; http only on a local host, as for `redirect_uri`. Sent on [RP-initiated logout](../core-concepts/logout.md#rp-initiated-logout) unless `LogoutOptions` names another. |
 | `authorization_parameters` | `[]` | Map of extra parameters, such as Google's `access_type`. `client_id`, `code_challenge`, `code_challenge_method`, `max_age`, `nonce`, `redirect_uri`, `request`, `request_uri`, `response_mode`, `response_type`, `scope` and `state` are refused, in any case. |
 
 ## client_assertion

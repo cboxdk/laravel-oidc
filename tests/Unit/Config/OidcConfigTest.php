@@ -188,6 +188,21 @@ it('refuses an invalid connection value', function (array $overrides, string $ke
     'reserved parameter in capitals' => [['authorization_parameters' => ['State' => 'fixed']], 'oidc.connections.main.authorization_parameters.State', 'is set by the package itself'],
     'parameters as a list' => [['authorization_parameters' => ['offline']], 'oidc.connections.main.authorization_parameters', 'must be a map of names to strings'],
     'http post logout uri' => [['post_logout_redirect_uri' => 'ftp://app.example.test/'], 'oidc.connections.main.post_logout_redirect_uri', 'must be an absolute http or https URL'],
+    'http redirect uri on a public host' => [['redirect_uri' => 'http://app.example.com/oidc/callback'], 'oidc.connections.main.redirect_uri', 'uses http on a host that is not local'],
+    'http redirect uri on a private address' => [['redirect_uri' => 'http://10.0.0.5/oidc/callback'], 'oidc.connections.main.redirect_uri', 'uses http on a host that is not local'],
+    'http redirect uri on a name that only looks local' => [['redirect_uri' => 'http://localhost.example.com/oidc/callback'], 'oidc.connections.main.redirect_uri', 'uses http on a host that is not local'],
+    'http post logout uri on a public host' => [['post_logout_redirect_uri' => 'http://app.example.com/bye'], 'oidc.connections.main.post_logout_redirect_uri', 'uses http on a host that is not local'],
+]);
+
+it('accepts plain http redirect URIs on local hosts only', function (string $url): void {
+    expect(oidcConfig(ConnectionFixtures::minimal(['redirect_uri' => $url, 'post_logout_redirect_uri' => $url]))->connection()->redirectUri)->toBe($url);
+})->with([
+    'localhost' => ['http://localhost:8000/oidc/callback'],
+    'loopback v4' => ['http://127.0.0.1:8000/oidc/callback'],
+    'loopback v6' => ['http://[::1]:8000/oidc/callback'],
+    'a .localhost name' => ['http://app.localhost/oidc/callback'],
+    'a .test name' => ['http://app.test/oidc/callback'],
+    'https anywhere' => ['https://app.example.com/oidc/callback'],
 ]);
 
 it('accepts a public client without a secret and drops a stray one', function (): void {

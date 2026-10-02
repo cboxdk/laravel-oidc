@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cbox\Oidc\Config;
 
 use Cbox\Oidc\Exceptions\InvalidConfiguration;
+use Cbox\Oidc\Support\Url;
 
 /**
  * Reads typed values out of one array of config/oidc.php and names the full key
@@ -183,13 +184,21 @@ readonly class ConfigReader
     }
 
     /**
-     * An absolute http or https URL without user info or fragment, for browser
-     * redirect targets such as the redirect URI (http is common in local
-     * development).
+     * An absolute https URL without user info or fragment, for browser
+     * redirect targets such as the redirect URI. Plain http is accepted only
+     * on a local host ({@see Url::isLocalHost()}), for local development: on
+     * any other host the code and state would cross the network unencrypted.
      */
     public function browserUrl(string $key): string
     {
-        return $this->url($key, $this->string($key), ['http', 'https']);
+        $value = $this->url($key, $this->string($key), ['http', 'https']);
+        $parts = (array) parse_url($value);
+
+        if (strtolower((string) ($parts['scheme'] ?? '')) === 'http' && ! Url::isLocalHost((string) ($parts['host'] ?? ''))) {
+            throw InvalidConfiguration::at($this->key($key), 'uses http on a host that is not local', sprintf('Set %s to an https URL and register that one at the provider. http is accepted only on localhost, 127.0.0.1, [::1] and names below .localhost or .test.', $this->key($key)));
+        }
+
+        return $value;
     }
 
     /**

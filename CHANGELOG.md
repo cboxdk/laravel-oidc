@@ -227,3 +227,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Before, the size limit counted compressed bytes on the wire, so a small gzip
   body from a hostile provider or CDN could expand to hundreds of megabytes in
   memory.
+- **No plain http redirect URIs outside local development.** `redirect_uri`
+  and `post_logout_redirect_uri`, and `LogoutOptions::$postLogoutRedirectUri`,
+  must be https, except on `localhost`, a loopback address or a name below
+  `.localhost` or `.test`. Before, http was accepted on any host and only
+  `oidc:check` warned, so a code could cross the network unencrypted.

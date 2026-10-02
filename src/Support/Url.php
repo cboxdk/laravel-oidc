@@ -47,6 +47,22 @@ final class Url
         return self::target(is_array($parts) ? ($parts['host'] ?? '') : '', is_array($parts) ? ($parts['path'] ?? '') : '');
     }
 
+    /**
+     * Whether $host is one that only resolves on this machine or in local
+     * development: localhost, a loopback address, or a name below .localhost
+     * or .test (RFC 6761). Plain http is accepted for a browser redirect to
+     * these alone (RFC 6749 3.1.2.1, RFC 8252 7.3).
+     */
+    public static function isLocalHost(string $host): bool
+    {
+        $host = strtolower($host);
+
+        return in_array($host, ['localhost', '[::1]', '::1'], true)
+            || preg_match('/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/D', $host) === 1
+            || str_ends_with($host, '.localhost')
+            || str_ends_with($host, '.test');
+    }
+
     public static function target(string $host, string $path): string
     {
         $path = rtrim(rawurldecode($path), '/');
