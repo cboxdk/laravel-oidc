@@ -201,3 +201,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   served several connections from one callback route could finish a login of
   one connection with a code another provider issued, when that provider sent
   no `iss`.
+- **Requested acr values are enforced.** A login that sends `acr_values`
+  (the `acrValues` option, or `acr_values` in `authorization_parameters`) keeps
+  them with its transaction, and its ID token must carry an `acr` that is one
+  of them, or the callback fails with the new code
+  `oidc_id_token_acr_mismatch`. Before, a step-up removed from the URL in the
+  browser came back as an accepted single-factor login.

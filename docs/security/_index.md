@@ -89,6 +89,9 @@ the class of report we most want.
 - **Swapped access tokens.** `at_hash`, when present, must match the access
   token, with the hash of the signing algorithm (SHA-512 for EdDSA).
 - **Stale sign-ins.** With `max_age`, `auth_time` is required and checked.
+- **Stripped step-up.** When a login sends `acr_values`, they are kept with the
+  login and the ID token's `acr` must be one of them, so removing them from the
+  URL in the browser does not turn a step-up into a single-factor login.
 - Exceptions name the rule and the claim, never a token or the nonce. The few
   values they repeat (an issuer, a tenant, an `alg`, a `typ`) are shortened,
   with control characters replaced.

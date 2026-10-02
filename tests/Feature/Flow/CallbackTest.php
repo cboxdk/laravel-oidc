@@ -20,6 +20,7 @@ use Cbox\Oidc\Flow\CallbackResult;
 use Cbox\Oidc\Flow\Prompt;
 use Cbox\Oidc\Tests\Support\ConnectionFixtures;
 use Cbox\Oidc\Tests\Support\FakeProvider;
+use Cbox\Oidc\Tests\Support\Refusals;
 use Cbox\Oidc\Tokens\SigningAlgorithm;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Http\Request;
@@ -105,6 +106,44 @@ it('refuses an ID token that does not belong to this login', function (array $cl
     'an old sign-in though max_age was sent' => [fn (): array => ['auth_time' => now()->getTimestamp() - 3600], ErrorCode::IdTokenAuthTimeInvalid, 'longer than the max_age of 60 seconds'],
     'another audience' => [['aud' => 'client-2'], ErrorCode::TokenAudienceInvalid, 'is not for the client "client-1"'],
 ]);
+
+it('refuses an ID token without the acr the login asked for (stripped step-up)', function (array $claims, string $message): void {
+    $request = ($this->flow)()->start(options: new AuthorizationOptions(acrValues: ['urn:example:mfa', 'urn:example:hwk']));
+
+    // Someone removed acr_values from the URL in the browser; the provider
+    // signed the person in without the second factor.
+    $stripped = (string) preg_replace('/&acr_values=[^&]*/', '', $request->url);
+    expect($stripped)->not->toContain('acr_values');
+
+    rejectedWith(fn (): CallbackResult => ($this->callback)($this->provider->approve($stripped, $claims)), TokenRejected::class, ErrorCode::IdTokenAcrMismatch, $message);
+})->with([
+    'no acr' => [[], 'has no acr, although the login asked for urn:example:mfa or urn:example:hwk'],
+    'a weaker acr' => [['acr' => 'urn:example:password'], 'has the acr "urn:example:password", but the login asked for urn:example:mfa or urn:example:hwk'],
+    'an acr of another case' => [['acr' => 'URN:EXAMPLE:MFA'], 'has the acr "URN:EXAMPLE:MFA"'],
+]);
+
+it('accepts an ID token with one of the acr values the login asked for', function (): void {
+    $request = ($this->flow)()->start(options: new AuthorizationOptions(acrValues: ['urn:example:mfa', 'urn:example:hwk']));
+    $result = ($this->callback)($this->provider->approve($request->url, ['acr' => 'urn:example:hwk']));
+
+    expect($result->claims->authenticationContext)->toBe('urn:example:hwk')
+        ->and($result->transaction->acrValues)->toBe(['urn:example:mfa', 'urn:example:hwk']);
+});
+
+it('enforces acr_values the connection sends, unless the login replaces them', function (): void {
+    Refusals::useConnection('main', ConnectionFixtures::minimal(['authorization_parameters' => ['acr_values' => 'urn:example:mfa']]));
+
+    $query = $this->provider->approve(($this->flow)()->start()->url, ['acr' => 'urn:example:password']);
+    rejectedWith(fn (): CallbackResult => ($this->callback)($query), TokenRejected::class, ErrorCode::IdTokenAcrMismatch, 'asked for urn:example:mfa');
+
+    $request = ($this->flow)()->start(options: new AuthorizationOptions(acrValues: ['urn:example:password']));
+    expect(($this->callback)($this->provider->approve($request->url, ['acr' => 'urn:example:password']))->claims->authenticationContext)->toBe('urn:example:password');
+});
+
+it('accepts any acr, or none, when the login asked for none', function (): void {
+    expect(($this->callback)($this->provider->approve(($this->flow)()->start()->url))->claims->authenticationContext)->toBeNull()
+        ->and(($this->callback)($this->provider->approve(($this->flow)()->start()->url, ['acr' => '0']))->claims->authenticationContext)->toBe('0');
+});
 
 it('refuses an ID token whose issuer differs from the callback\'s iss', function (): void {
     $query = $this->provider->approve(($this->flow)()->start()->url, ['iss' => 'https://evil.example.test']);

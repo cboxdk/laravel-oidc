@@ -40,6 +40,7 @@ The first rule a token breaks throws a `TokenRejected` with its own code, and
 | 15 | `at_hash`, when present, is the left half of the hash of the access token: SHA-256, -384 or -512 after the algorithm, and SHA-512 for EdDSA. | `oidc_id_token_at_hash_mismatch` |
 | 16 | The tenant claim is present and allowed (see below). | `oidc_tenant_claim_missing`, `oidc_tenant_not_allowed` |
 | 17 | `amr` and `groups` are lists of strings; `acr` and `sid` are strings. | `oidc_token_claim_invalid` |
+| 18 | When the login sent `acr_values` (the `acrValues` option, or `acr_values` in the connection's `authorization_parameters`), `acr` is present and exactly one of them. The request travels through the browser, so without this a step-up someone removed from the URL would come back as a plain login. | `oidc_id_token_acr_mismatch` |
 
 Times are whole seconds from the clock you bind to `Psr\Clock\ClockInterface`
 (Carbon's by default, so `$this->travel()` moves it in tests). A token is

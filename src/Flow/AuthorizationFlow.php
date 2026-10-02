@@ -92,6 +92,7 @@ final readonly class AuthorizationFlow
             redirectUri: $config->redirectUri,
             maxAge: $options->maxAge ?? $config->maxAge,
             createdAt: $this->clock->now()->getTimestamp(),
+            acrValues: $options->acrValues !== [] ? $options->acrValues : $this->configuredAcrValues($config),
         );
 
         $url = AuthorizationUrl::build($config, $metadata, $transaction, $options);
@@ -157,6 +158,23 @@ final readonly class AuthorizationFlow
         }
 
         return new CallbackResult($config->name, $claims, $tokens, $transaction, $parameters->iss, $userInfo);
+    }
+
+    /**
+     * The acr_values the connection sends through authorization_parameters,
+     * which an option of the login replaces.
+     *
+     * @return list<string>
+     */
+    private function configuredAcrValues(ConnectionConfig $config): array
+    {
+        foreach ($config->authorizationParameters as $name => $value) {
+            if (strtolower($name) === 'acr_values') {
+                return array_values(array_filter(explode(' ', $value), static fn (string $acr): bool => $acr !== ''));
+            }
+        }
+
+        return [];
     }
 
     private function transaction(ConnectionConfig $config, CallbackParameters $parameters): AuthorizationTransaction

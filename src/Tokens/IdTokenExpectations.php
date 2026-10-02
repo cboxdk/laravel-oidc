@@ -22,15 +22,22 @@ use SensitiveParameter;
  * - $renews: for a token a refresh returned, the claims of the login it
  *   renews; issuer, subject, tenant, auth_time and nonce must then match
  *   them (OpenID Connect Core 12.2).
+ * - $acrValues: the acr_values the login sent. The token's acr must then be
+ *   one of them (OpenID Connect Core 3.1.3.7 step 11), so a step-up a
+ *   browser stripped from the request is not accepted as single-factor.
  */
 final readonly class IdTokenExpectations
 {
+    /**
+     * @param  list<string>  $acrValues
+     */
     public function __construct(
         #[SensitiveParameter] public ?string $nonce,
         public ?int $maxAge = null,
         #[SensitiveParameter] public ?string $accessToken = null,
         public ?string $responseIssuer = null,
         public ?VerifiedClaims $renews = null,
+        public array $acrValues = [],
     ) {}
 
     /**
@@ -38,7 +45,7 @@ final readonly class IdTokenExpectations
      */
     public static function forLogin(AuthorizationTransaction $transaction, #[SensitiveParameter] ?string $accessToken = null, ?string $responseIssuer = null): self
     {
-        return new self($transaction->nonce, $transaction->maxAge, $accessToken, $responseIssuer);
+        return new self($transaction->nonce, $transaction->maxAge, $accessToken, $responseIssuer, acrValues: $transaction->acrValues);
     }
 
     /**
@@ -62,6 +69,7 @@ final readonly class IdTokenExpectations
             'accessToken' => $this->accessToken === null ? null : '[redacted]',
             'responseIssuer' => $this->responseIssuer,
             'renews' => $this->renews instanceof VerifiedClaims ? $this->renews->issuer.' '.$this->renews->subject : null,
+            'acrValues' => $this->acrValues,
         ];
     }
 }

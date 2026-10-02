@@ -127,6 +127,9 @@ enum ErrorCode: string
      */
     case IdTokenAuthTimeInvalid = 'oidc_id_token_auth_time_invalid';
 
+    /** The login sent acr_values, and the ID token has no acr or one it did not ask for. */
+    case IdTokenAcrMismatch = 'oidc_id_token_acr_mismatch';
+
     /** The ID token's at_hash does not match the access token it came with. */
     case IdTokenAtHashMismatch = 'oidc_id_token_at_hash_mismatch';
 

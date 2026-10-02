@@ -56,6 +56,7 @@ secret.
 | `oidc_token_claim_invalid` | `TokenRejected` | A required claim is missing (`sub`, `exp`, `iat`), or a claim has a form the protocol does not allow; `claim()` names it. | No |
 | `oidc_id_token_nonce_mismatch` | `TokenRejected` | The ID token has no nonce, or not the nonce of this login. | Start again |
 | `oidc_id_token_auth_time_invalid` | `TokenRejected` | `auth_time` is missing though `max_age` was sent, lies in the future, or is older than `max_age` allows. | Start again |
+| `oidc_id_token_acr_mismatch` | `TokenRejected` | The login sent `acr_values`, and the ID token has no `acr` or one the login did not ask for. | Start again |
 | `oidc_id_token_at_hash_mismatch` | `TokenRejected` | `at_hash` does not match the access token. | Start again |
 | `oidc_tenant_claim_missing` | `TenantRejected` | The connection pins a tenant and the token has no tenant claim, such as a consumer Google account without `hd`. | No |
 | `oidc_tenant_not_allowed` | `TenantRejected` | The token's tenant is not on the connection's allow-list, or `tid` is not a GUID. | No |

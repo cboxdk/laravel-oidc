@@ -6,12 +6,13 @@ use Cbox\Oidc\Flow\AuthorizationTransaction;
 
 function transaction(): AuthorizationTransaction
 {
-    return new AuthorizationTransaction('main', 'state-1', 'nonce-1', 'verifier-1', 'https://app.example.test/oidc/callback', 300, 1_790_000_000);
+    return new AuthorizationTransaction('main', 'state-1', 'nonce-1', 'verifier-1', 'https://app.example.test/oidc/callback', 300, 1_790_000_000, ['urn:example:mfa']);
 }
 
 it('round-trips through its array form', function (): void {
     expect(AuthorizationTransaction::fromArray(transaction()->toArray()))->toEqual(transaction())
-        ->and(AuthorizationTransaction::fromArray([...transaction()->toArray(), 'max_age' => null])?->maxAge)->toBeNull();
+        ->and(AuthorizationTransaction::fromArray([...transaction()->toArray(), 'max_age' => null])?->maxAge)->toBeNull()
+        ->and(AuthorizationTransaction::fromArray(array_diff_key(transaction()->toArray(), ['acr_values' => true]))?->acrValues)->toBe([]);
 });
 
 it('reads a damaged entry as no entry', function (mixed $values): void {
@@ -23,6 +24,9 @@ it('reads a damaged entry as no entry', function (mixed $values): void {
     'verifier that is not a string' => [[...transaction()->toArray(), 'code_verifier' => 42]],
     'created_at as a string' => [[...transaction()->toArray(), 'created_at' => '1790000000']],
     'max_age as a string' => [[...transaction()->toArray(), 'max_age' => '300']],
+    'acr_values as a string' => [[...transaction()->toArray(), 'acr_values' => 'urn:example:mfa']],
+    'acr_values with a number' => [[...transaction()->toArray(), 'acr_values' => [1]]],
+    'acr_values as a map' => [[...transaction()->toArray(), 'acr_values' => ['a' => 'urn:example:mfa']]],
 ]);
 
 it('keeps the nonce and the verifier out of dumps', function (): void {

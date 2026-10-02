@@ -109,6 +109,12 @@ return Oidc::redirect('main', new AuthorizationOptions(
 ));
 ```
 
+`acrValues` is enforced: the login remembers them, and its ID token must carry
+an `acr` that is one of them, or the callback fails with
+`oidc_id_token_acr_mismatch`. Ask only for values the provider lists in
+`acr_values_supported`; a provider that ignores `acr_values` (Microsoft Entra
+uses `claims` and the `acrs` claim instead) fails every such login.
+
 Every option is checked when it is written; a wrong one throws
 `InvalidAuthorizationOptions` (`oidc_authorization_options_invalid`):
 `Prompt::None` with another prompt, a protocol parameter in `parameters`, a

@@ -151,6 +151,21 @@ class TokenRejected extends OidcException
         );
     }
 
+    /**
+     * @param  list<string>  $requested
+     */
+    public static function acrMismatch(string $connection, ?string $acr, array $requested): self
+    {
+        return static::make(
+            ErrorCode::IdTokenAcrMismatch,
+            $acr === null
+                ? sprintf('The ID token of connection "%s" has no acr, although the login asked for %s.', $connection, implode(' or ', $requested))
+                : sprintf('The ID token of connection "%s" has the acr "%s", but the login asked for %s.', $connection, self::shorten($acr), implode(' or ', $requested)),
+            'Start the login again. The person signed in at another level than the login asked for: the acr_values may have been removed on the way to the provider, or the provider does not honour them; check the values it supports (acr_values_supported).',
+            'acr',
+        );
+    }
+
     public static function authTimeInvalid(string $connection, string $problem, string $fix): self
     {
         return static::make(

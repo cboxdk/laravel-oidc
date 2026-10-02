@@ -9,12 +9,16 @@ use SensitiveParameter;
 /**
  * What one started login keeps until its callback: the state that binds the
  * callback to this browser, the nonce the ID token must repeat, the PKCE
- * verifier for the code exchange, and what the request asked for.
+ * verifier for the code exchange, and what the request asked for (max_age
+ * and acr_values, which the ID token must then satisfy).
  *
  * It lives server-side, in the session by default, and is used once.
  */
 final readonly class AuthorizationTransaction
 {
+    /**
+     * @param  list<string>  $acrValues  the acr_values the login sent; the ID token's acr must be one of them
+     */
     public function __construct(
         public string $connection,
         public string $state,
@@ -23,12 +27,13 @@ final readonly class AuthorizationTransaction
         public string $redirectUri,
         public ?int $maxAge,
         public int $createdAt,
+        public array $acrValues = [],
     ) {}
 
     /**
      * The array form a {@see TransactionStore} keeps.
      *
-     * @return array{connection: string, state: string, nonce: string, code_verifier: string, redirect_uri: string, max_age: int|null, created_at: int}
+     * @return array{connection: string, state: string, nonce: string, code_verifier: string, redirect_uri: string, max_age: int|null, created_at: int, acr_values: list<string>}
      */
     public function toArray(): array
     {
@@ -40,6 +45,7 @@ final readonly class AuthorizationTransaction
             'redirect_uri' => $this->redirectUri,
             'max_age' => $this->maxAge,
             'created_at' => $this->createdAt,
+            'acr_values' => $this->acrValues,
         ];
     }
 
@@ -70,7 +76,23 @@ final readonly class AuthorizationTransaction
             return null;
         }
 
-        return new self($strings['connection'], $strings['state'], $strings['nonce'], $strings['code_verifier'], $strings['redirect_uri'], $maxAge, $createdAt);
+        $acrValues = $values['acr_values'] ?? [];
+
+        if (! is_array($acrValues) || ! array_is_list($acrValues)) {
+            return null;
+        }
+
+        $acr = [];
+
+        foreach ($acrValues as $value) {
+            if (! is_string($value) || $value === '') {
+                return null;
+            }
+
+            $acr[] = $value;
+        }
+
+        return new self($strings['connection'], $strings['state'], $strings['nonce'], $strings['code_verifier'], $strings['redirect_uri'], $maxAge, $createdAt, $acr);
     }
 
     /**
@@ -86,6 +108,7 @@ final readonly class AuthorizationTransaction
             'redirectUri' => $this->redirectUri,
             'maxAge' => $this->maxAge,
             'createdAt' => $this->createdAt,
+            'acrValues' => $this->acrValues,
         ];
     }
 }

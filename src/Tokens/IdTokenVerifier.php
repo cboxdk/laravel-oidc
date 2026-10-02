@@ -35,7 +35,8 @@ use SensitiveParameter;
  *  8. at_hash, when present, is the hash of the access token;
  *  9. the tenant claim (Entra tid, Google hd) is present and allowed;
  * 10. amr, acr, sid and groups have the form the protocol gives them;
- * 11. for a token a refresh returned ({@see IdTokenExpectations::forRefresh()}),
+ * 11. acr is one of the login's acr_values when it sent some;
+ * 12. for a token a refresh returned ({@see IdTokenExpectations::forRefresh()}),
  *     iss, sub and the tenant are those of the login it renews, and auth_time
  *     and nonce, when present, too (OpenID Connect Core 12.2).
  *
@@ -80,6 +81,7 @@ final readonly class IdTokenVerifier
         $authenticationMethods = $this->authenticationMethods($name, $claims);
         $authenticationContext = $this->checks->optionalString(self::KIND, $name, $claims, 'acr');
         $sessionId = $this->checks->optionalString(self::KIND, $name, $claims, 'sid');
+        $this->authenticationContext($name, $authenticationContext, $expected->acrValues);
 
         if ($expected->renews instanceof VerifiedClaims) {
             $this->continuity($config, $expected->renews, $issuer, $subject, $tenant, $authTime, $claims);
@@ -121,6 +123,16 @@ final readonly class IdTokenVerifier
 
         if (! hash_equals($expected, $nonce)) {
             throw TokenRejected::nonceMismatch($connection, missing: false);
+        }
+    }
+
+    /**
+     * @param  list<string>  $requested
+     */
+    private function authenticationContext(string $connection, ?string $acr, array $requested): void
+    {
+        if ($requested !== [] && ($acr === null || ! in_array($acr, $requested, true))) {
+            throw TokenRejected::acrMismatch($connection, $acr, $requested);
         }
     }
 
