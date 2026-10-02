@@ -20,14 +20,26 @@ use Cbox\Oidc\Http\LaravelHttpClient;
 use Cbox\Oidc\Keys\KeySelector;
 use Cbox\Oidc\Keys\KeySetRepository;
 use Cbox\Oidc\Keys\SigningKeys;
+use Cbox\Oidc\Logout\LogoutFlow;
+use Cbox\Oidc\Logout\LogoutTokenReplayGuard;
+use Cbox\Oidc\Logout\LogoutTokenVerifier;
+use Cbox\Oidc\Routing\BackChannelLogoutController;
 use Cbox\Oidc\Support\CarbonClock;
+use Cbox\Oidc\Tokens\ClaimChecks;
 use Cbox\Oidc\Tokens\IdTokenVerifier;
 use Cbox\Oidc\Tokens\SignedJwtReader;
 use Cbox\Oidc\Tokens\TokenEndpoint;
+use Cbox\Oidc\Tokens\TokenRefresher;
+use Cbox\Oidc\Tokens\TokenRevocation;
+use Cbox\Oidc\UserInfo\UserInfoEndpoint;
 use Cbox\Ssrf\SsrfServiceProvider;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Routing\Route;
+use Illuminate\Routing\Router;
 use Illuminate\Support\ServiceProvider;
 use Psr\Clock\ClockInterface;
 
@@ -72,12 +84,50 @@ class OidcServiceProvider extends ServiceProvider
         $this->app->singleton(ClientAuthentication::class);
         $this->app->singleton(TokenEndpoint::class);
         $this->app->singleton(SignedJwtReader::class);
+        $this->app->singleton(ClaimChecks::class);
         $this->app->singleton(IdTokenVerifier::class);
         $this->app->singleton(AuthorizationFlow::class);
+        $this->app->singleton(TokenRefresher::class);
+        $this->app->singleton(TokenRevocation::class);
+        $this->app->singleton(UserInfoEndpoint::class);
+        $this->app->singleton(LogoutFlow::class);
+        $this->app->singleton(LogoutTokenVerifier::class);
+        $this->app->singleton(LogoutTokenReplayGuard::class, static fn (Application $app): LogoutTokenReplayGuard => new LogoutTokenReplayGuard(
+            $app->make(CacheFactory::class)->store($app->make(CacheConfig::class)->store),
+            $app->make(ClockInterface::class),
+        ));
     }
 
     public function boot(): void
     {
         $this->publishes([__DIR__.'/../config/oidc.php' => $this->app->configPath('oidc.php')], 'oidc-config');
+
+        $this->registerRouteMacros();
+    }
+
+    /**
+     * Route::oidcBackChannelLogout($uri, $connection): the back-channel logout
+     * endpoint, opt-in. A POST route to {@see BackChannelLogoutController},
+     * named oidc.backchannel-logout, without CSRF verification (the provider
+     * posts it server to server). Put {connection} in $uri, or pass
+     * $connection for a route of one connection.
+     */
+    private function registerRouteMacros(): void
+    {
+        Router::macro('oidcBackChannelLogout', function (string $uri = 'oidc/{connection}/backchannel-logout', ?string $connection = null): Route {
+            /** @var Router $this */
+            $route = $this->post($uri, BackChannelLogoutController::class)
+                ->name($connection === null ? BackChannelLogoutController::ROUTE_NAME : BackChannelLogoutController::ROUTE_NAME.'.'.$connection)
+                ->withoutMiddleware([
+                    ValidateCsrfToken::class,
+                    VerifyCsrfToken::class,
+                ]);
+
+            if ($connection !== null) {
+                $route->defaults('connection', $connection);
+            }
+
+            return $route;
+        });
     }
 }

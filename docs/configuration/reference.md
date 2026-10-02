@@ -45,8 +45,8 @@ lists the configured names.
 | `max_token_age_seconds` | `600` | 1 to 86400. An ID token issued longer ago is refused. |
 | `max_age` | `null` | 0 to 31536000. Sent as `max_age`; `auth_time` then becomes required. |
 | `tenant` | `null` | `['claim' => ..., 'allowed' => [...]]`. The ID token's claim must be present and its value listed; `hd` and `tid` are compared without case, other claims exactly. `['*']` alone accepts any tenant. Required, on `tid`, when the issuer contains `{tenantid}`. See [tenants](../core-concepts/id-token-verification.md#tenants). |
-| `groups` | `['source' => 'id_token', 'claim' => 'groups']` | `source` is `id_token`, `userinfo` or `none`. With `id_token`, the claim must be a list of strings; Entra's group overage gives `groups` null. |
-| `post_logout_redirect_uri` | `null` | Absolute http or https URL. |
+| `groups` | `['source' => 'id_token', 'claim' => 'groups']` | `source` is `id_token`, `userinfo` or `none`. The claim must be a list of strings. With `id_token`, Entra's group overage gives `groups` null. With `userinfo`, the login callback calls userinfo and takes the groups from there; see [refresh and userinfo](../core-concepts/refresh-and-userinfo.md#groups-from-userinfo). |
+| `post_logout_redirect_uri` | `null` | Absolute http or https URL. Sent on [RP-initiated logout](../core-concepts/logout.md#rp-initiated-logout) unless `LogoutOptions` names another. |
 | `authorization_parameters` | `[]` | Map of extra parameters, such as Google's `access_type`. `client_id`, `code_challenge`, `code_challenge_method`, `max_age`, `nonce`, `redirect_uri`, `request`, `request_uri`, `response_mode`, `response_type`, `scope` and `state` are refused, in any case. |
 
 ## client_assertion
@@ -84,7 +84,7 @@ configuration is parsed, so a wrong key fails at once.
 
 | Key | Default | Rule |
 |---|---|---|
-| `store` | `null` (the default store) | A cache store name. |
+| `store` | `null` (the default store) | A cache store name. Also holds the `jti` of accepted back-channel logout tokens, so in production every server must share it (redis, database or memcached). |
 | `discovery_ttl_seconds` | `86400` | 0 to 604800. |
 | `jwks_default_ttl_seconds` | `3600` | Within the min and max below. Used when the provider sends no `max-age`. |
 | `jwks_min_ttl_seconds` | `300` | 0 to 604800, at most the max. |

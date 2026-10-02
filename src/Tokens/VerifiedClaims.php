@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cbox\Oidc\Tokens;
 
+use Cbox\Oidc\Tokens\Concerns\ReadsClaims;
 use DateTimeImmutable;
 
 /**
@@ -17,6 +18,8 @@ use DateTimeImmutable;
  */
 final readonly class VerifiedClaims
 {
+    use ReadsClaims;
+
     /**
      * @param  non-empty-list<string>  $audience
      * @param  list<string>|null  $authenticationMethods  amr, each method once
@@ -41,55 +44,18 @@ final readonly class VerifiedClaims
         public array $claims,
     ) {}
 
-    /** Whether the token has the claim $name, even with a null value. */
-    public function has(string $name): bool
-    {
-        return array_key_exists($name, $this->claims);
-    }
-
-    /** The claim $name as sent, or $default when the token has none. */
-    public function claim(string $name, mixed $default = null): mixed
-    {
-        return array_key_exists($name, $this->claims) ? $this->claims[$name] : $default;
-    }
-
-    /** The claim $name when it is a string; null otherwise. */
-    public function string(string $name): ?string
-    {
-        $value = $this->claims[$name] ?? null;
-
-        return is_string($value) ? $value : null;
-    }
-
     /**
-     * The email claim. Use it to contact the person, not to identify them:
-     * check {@see self::emailVerified()} before you trust it, and match
-     * accounts on issuer and subject.
-     */
-    public function email(): ?string
-    {
-        return $this->string('email');
-    }
-
-    /** Whether the provider says it verified the email address: true only for the JSON value true. */
-    public function emailVerified(): bool
-    {
-        return ($this->claims['email_verified'] ?? null) === true;
-    }
-
-    /** The name claim, the person's full name for display. */
-    public function name(): ?string
-    {
-        return $this->string('name');
-    }
-
-    /**
-     * Every claim of the token, as sent.
+     * A copy with the groups replaced, such as the groups userinfo returned
+     * for a connection whose groups.source is userinfo.
      *
-     * @return array<string, mixed>
+     * @param  list<string>|null  $groups
      */
-    public function all(): array
+    public function withGroups(?array $groups, bool $overage = false): self
     {
-        return $this->claims;
+        return new self(
+            $this->connection, $this->issuer, $this->subject, $this->audience, $this->authorizedParty,
+            $this->issuedAt, $this->expiresAt, $this->authTime, $this->authenticationMethods,
+            $this->authenticationContext, $this->sessionId, $this->tenant, $groups, $overage, $this->claims,
+        );
     }
 }

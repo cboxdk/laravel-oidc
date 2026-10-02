@@ -90,6 +90,36 @@ the class of report we most want.
   values they repeat (an issuer, a tenant, an `alg`, a `typ`) are shortened,
   with control characters replaced.
 
+## What refresh, userinfo and revocation prevent
+
+- **A refresh that swaps the person.** An ID token a refresh returns passes
+  every ID token rule, and must name the original issuer, subject and tenant,
+  and the original `auth_time` and `nonce` when it carries them (OpenID
+  Connect Core 12.2).
+- **Userinfo for someone else.** The userinfo response's `sub` must be the ID
+  token's subject (OpenID Connect Core 5.3.4); a mismatch fails the call, and
+  a login that reads groups from userinfo fails with it.
+- The refresh token, access token and revocation token travel only to the
+  provider's advertised https endpoints through the SSRF guard, and are
+  redacted when dumped.
+
+## What logout prevents
+
+- **Open redirects.** The logout URL is built from the checked discovery
+  document and passes the SSRF guard's redirect check; a
+  `post_logout_redirect_uri` must be an absolute http or https URL.
+- **Forged logout tokens.** A logout token passes the same form, `alg`, key,
+  signature, `iss`, `aud` and lifetime rules as an ID token.
+- **An ID token used to sign its owner out.** A logout token must carry the
+  back-channel logout event and must not carry a `nonce`, which every ID token
+  of a login has; an ID token's `typ` and a logout token's are told apart too.
+- **Replayed logout tokens.** Each `jti` is accepted once, remembered with an
+  atomic cache add until the token's `exp` plus the leeway. A token refused
+  for another reason does not use up its `jti`, and a failed listener gives
+  it back so the provider can retry.
+- **Tokens in logs.** A refused logout token is logged with its code and
+  rule, never the token; the 400 answer names only the code.
+
 ## Honest scope
 
 - The package is a relying party. It issues no tokens.
@@ -106,5 +136,18 @@ the class of report we most want.
 - The default transaction store trusts the Laravel session. A session that
   cannot reach the callback (a `SameSite=strict` cookie) makes every login
   fail closed with `oidc_state_mismatch`.
+- A logout token typed `JWT`, or not typed, is accepted, because providers
+  that predate explicit typing send those; the event and the ban on `nonce`
+  keep an ID token out.
+- The `jti` of logout tokens is only as shared as the cache store of
+  `oidc.cache.store`. With the array or file store, each server remembers its
+  own.
+- The package verifies a logout token and tells you; ending the sessions it
+  names is up to the application, which knows where its sessions live. The
+  [logout page](../core-concepts/logout.md#back-channel-logout) shows one way.
+- The tenant allow-list is not applied to logout tokens, which end sessions
+  rather than start them.
+- Refresh tokens are as safe as the place you keep them. Encrypt the session
+  (`session.encrypt`) or the token itself.
 - The SSRF guard is defence in depth; a network egress allow-list is the only
   complete control.

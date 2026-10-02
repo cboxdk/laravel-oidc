@@ -1,7 +1,7 @@
 ---
 title: Errors
 description: Every error code, what it means and whether a retry can help
-weight: 19
+weight: 24
 ---
 
 # Errors
@@ -41,7 +41,7 @@ secret.
 | `oidc_callback_issuer_mismatch` | `CallbackRejected` | The callback's `iss` is missing although the provider announces it, or names another issuer (RFC 9207). | Start again |
 | `oidc_callback_invalid` | `CallbackRejected` | The callback has no usable code, or a parameter in another form than one string. | Start again |
 | `oidc_authorization_denied` | `AuthorizationDenied` | The provider answered with an OAuth error; `error()` gives the code, `interactionRequired()` tells a silent login that needs the person. | Start again |
-| `oidc_token_request_rejected` | `TokenRequestRejected` | The token endpoint refused the request; `error()` gives the code, such as `invalid_grant` or `invalid_client`. | Depends on the code |
+| `oidc_token_request_rejected` | `TokenRequestRejected` | The token endpoint refused the request; `error()` gives the code, such as `invalid_grant` or `invalid_client`, and `refreshTokenInvalid()` tells a refresh token that is no longer valid. | Depends on the code |
 | `oidc_token_malformed` | `TokenRejected` | The token is not a compact, signed JWT the package reads: too long, encrypted, a header or payload that is not a JSON object with unique keys, or `crit` or `b64` in the header. | No |
 | `oidc_token_type_invalid` | `TokenRejected` | The token's `typ` is that of another kind of token, such as `logout+jwt`. | No |
 | `oidc_token_algorithm_not_allowed` | `TokenRejected` | `alg` is `none`, `HS*`, or not one of the connection's algorithms that the provider lists. | No |
@@ -57,9 +57,20 @@ secret.
 | `oidc_id_token_at_hash_mismatch` | `TokenRejected` | `at_hash` does not match the access token. | Start again |
 | `oidc_tenant_claim_missing` | `TenantRejected` | The connection pins a tenant and the token has no tenant claim, such as a consumer Google account without `hd`. | No |
 | `oidc_tenant_not_allowed` | `TenantRejected` | The token's tenant is not on the connection's allow-list, or `tid` is not a GUID. | No |
+| `oidc_refreshed_id_token_mismatch` | `TokenRejected` | The ID token a refresh returned names another issuer, subject or tenant than the login it renews, or another `auth_time` or `nonce`. | Sign in again |
+| `oidc_endpoint_not_supported` | `EndpointNotSupported` | The provider advertises no `userinfo_endpoint`, `end_session_endpoint` or `revocation_endpoint`; `endpoint()` names it. | No |
+| `oidc_userinfo_rejected` | `UserInfoRejected` | The userinfo endpoint answered 401 or 403; `error()` gives the Bearer error, such as `invalid_token`. | After a refresh |
+| `oidc_userinfo_subject_mismatch` | `UserInfoRejected` | The userinfo response names another `sub` than the ID token. | No |
+| `oidc_revocation_rejected` | `RevocationRejected` | The revocation endpoint refused the request; `error()` gives the code, such as `unsupported_token_type`. | No |
+| `oidc_argument_invalid` | `InvalidArgument` | A value passed to a method is malformed, such as an empty refresh token or a scope with a space. | No |
+| `oidc_logout_options_invalid` | `InvalidLogoutOptions` | A `LogoutOptions` value is invalid, such as an `idTokenHint` that is not a JWT. | No |
+| `oidc_logout_token_invalid` | `LogoutTokenRejected` | A logout token has no back-channel logout event, has a `nonce`, names neither `sub` nor `sid`, or has no `jti`. | No |
+| `oidc_logout_token_replayed` | `LogoutTokenRejected` | A logout token with this `jti` was accepted already. | No |
 
 `TokenRejected::claim()` names the claim or header member a token failure is
 about, such as `exp` or `alg`. `TenantRejected` extends `TokenRejected`, so
 catch it first when you want to tell a person that their organisation cannot
-sign in. See [ID token verification](id-token-verification.md) for the order
-of the checks.
+sign in. `LogoutTokenRejected` extends it too. See
+[ID token verification](id-token-verification.md) and
+[logout](logout.md#the-rules-a-logout-token-must-pass) for the order of the
+checks.

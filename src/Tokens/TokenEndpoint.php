@@ -61,6 +61,29 @@ final readonly class TokenEndpoint
     }
 
     /**
+     * Uses a refresh token (RFC 6749 6). $scopes, when given, narrows the
+     * scope of the new access token; the provider refuses a scope the
+     * original grant did not include.
+     *
+     * @param  list<string>|null  $scopes
+     *
+     * @throws TokenRequestRejected
+     * @throws InvalidProviderResponse
+     * @throws ProviderUnavailable
+     * @throws OutboundRequestBlocked
+     */
+    public function refresh(ConnectionConfig $connection, ProviderMetadata $metadata, #[SensitiveParameter] string $refreshToken, ?array $scopes = null): TokenSet
+    {
+        $form = ['grant_type' => 'refresh_token', 'refresh_token' => $refreshToken];
+
+        if ($scopes !== null) {
+            $form['scope'] = implode(' ', $scopes);
+        }
+
+        return $this->request($connection, $metadata, $form);
+    }
+
+    /**
      * Sends one grant to the token endpoint and reads the token response.
      *
      * @param  array<string, string>  $form
@@ -83,7 +106,7 @@ final readonly class TokenEndpoint
 
         if (! $response->successful()) {
             if ($response->status >= 400 && $response->status < 500 && $document !== null && array_key_exists('error', $document)) {
-                throw TokenRequestRejected::byProvider($connection->name, $url, $response->status, OAuthError::code($document['error']));
+                throw TokenRequestRejected::byProvider($connection->name, $url, $response->status, OAuthError::code($document['error']), $form['grant_type'] ?? 'unknown');
             }
 
             throw InvalidProviderResponse::status($url, $response->status);

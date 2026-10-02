@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cbox\Oidc\Exceptions;
 
+use Cbox\Oidc\Tokens\TokenKind;
+
 /**
  * The token verified, but its tenant is not one the connection allows: a
  * Google account outside your Workspace domains (hd), or a Microsoft Entra
@@ -14,11 +16,11 @@ namespace Cbox\Oidc\Exceptions;
  */
 class TenantRejected extends TokenRejected
 {
-    public static function missing(string $connection, string $claim): self
+    public static function missing(string $connection, string $claim, TokenKind $kind = TokenKind::IdToken): self
     {
         return static::make(
             ErrorCode::TenantClaimMissing,
-            sprintf('The ID token of connection "%s" has no %s claim, and the connection only accepts named tenants.', $connection, $claim),
+            sprintf('The %s of connection "%s" has no %s claim, and the connection only accepts named tenants.', $kind->label(), $connection, $claim),
             $claim === 'hd'
                 ? 'The person signed in with a consumer Google account, not one of a Workspace domain. Ask them to use their work account.'
                 : sprintf('The person\'s account belongs to no tenant the provider names in %s. Check the provider, and oidc.connections.%s.tenant.claim.', $claim, $connection),
@@ -36,11 +38,11 @@ class TenantRejected extends TokenRejected
         );
     }
 
-    public static function invalidTenant(string $connection, string $claim, string $problem): self
+    public static function invalidTenant(string $connection, string $claim, string $problem, TokenKind $kind = TokenKind::IdToken): self
     {
         return static::make(
             ErrorCode::TenantNotAllowed,
-            sprintf('The ID token of connection "%s" has a %s claim that %s.', $connection, $claim, $problem),
+            sprintf('The %s of connection "%s" has a %s claim that %s.', $kind->label(), $connection, $claim, $problem),
             'The token does not name a tenant in the form the provider uses. Do not accept it.',
             $claim,
         );

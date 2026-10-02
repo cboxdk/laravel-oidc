@@ -108,6 +108,48 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Key validity.** A key of the provider's key set marked `revoked`, or
   outside its `exp` and `nbf` members (OpenID Federation key sets), no longer
   fits a token.
+- **Refresh tokens.** `TokenRefresher::refresh($claims, $refreshToken)` uses
+  the refresh token at the token endpoint of the login's connection and returns
+  a `RefreshResult`: the new tokens, the refresh token to keep (the rotated one,
+  or the old one) and the verified claims of the new ID token. That ID token
+  passes every ID token rule but the nonce and `max_age`, and must name the
+  original issuer, subject and tenant, and the original `auth_time` and
+  `nonce` when it carries them (`oidc_refreshed_id_token_mismatch`).
+  `TokenRequestRejected` now names the grant, and `refreshTokenInvalid()` tells
+  a refresh token the provider no longer accepts.
+- **Userinfo.** `UserInfoEndpoint::fetch($claims, $accessToken)` calls the
+  userinfo endpoint with the access token and returns a `UserInfo`, refusing a
+  response for another `sub` (`oidc_userinfo_subject_mismatch`), a 401 or 403
+  (`UserInfoRejected`, `oidc_userinfo_rejected`, with the Bearer error) and a
+  signed `application/jwt` response. A connection whose `groups.source` is
+  `userinfo` now reads its groups there during the login callback;
+  `CallbackResult::$userInfo` carries the response.
+- **RP-initiated logout.** `LogoutFlow::start()` builds the logout request to
+  the provider's `end_session_endpoint` with `client_id`, and `id_token_hint`,
+  `post_logout_redirect_uri`, `state`, `logout_hint` and `ui_locales` from
+  `LogoutOptions` or the connection; `redirect()` falls back to a URL of yours
+  when the provider has no endpoint. The URL passes the SSRF guard's redirect
+  check.
+- **Token revocation.** `TokenRevocation::revoke()` revokes a refresh or
+  access token (RFC 7009) with the connection's client authentication.
+  Failures are `RevocationRejected` (`oidc_revocation_rejected`) and
+  `ProviderUnavailable`.
+- **Back-channel logout.** `LogoutTokenVerifier` verifies a logout token
+  (OpenID Connect Back-Channel Logout 1.0): the ID token's form, signature,
+  `iss`, `aud` and lifetime rules, a `typ` of `logout+jwt`, `JWT` or none, the
+  back-channel logout event, no `nonce`, a `sub` or `sid`, and a `jti`
+  accepted once, remembered in the cache until the token expires. Failures are
+  `LogoutTokenRejected` (`oidc_logout_token_invalid`,
+  `oidc_logout_token_replayed`), which extends `TokenRejected`. The opt-in
+  route macro `Route::oidcBackChannelLogout()` registers a POST endpoint
+  without CSRF verification that dispatches `BackChannelLogoutReceived` and
+  answers 200, 400, 404 or 503 as the specification asks. `LogoutToken::matches()`
+  tells whether a session's verified claims are meant.
+- **Missing endpoints and bad arguments.** A call to an endpoint the provider
+  does not advertise fails with `EndpointNotSupported`
+  (`oidc_endpoint_not_supported`), and each service has `supported()`. A
+  malformed token or scope passed to a method fails with `InvalidArgument`
+  (`oidc_argument_invalid`).
 
 ### Fixed
 

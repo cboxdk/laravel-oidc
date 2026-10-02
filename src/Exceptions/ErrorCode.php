@@ -129,4 +129,38 @@ enum ErrorCode: string
 
     /** The token's tenant (tid, hd) is not one the connection allows. */
     case TenantNotAllowed = 'oidc_tenant_not_allowed';
+
+    /**
+     * An ID token returned by a refresh names another issuer, subject, tenant,
+     * auth_time or nonce than the login it renews (OpenID Connect Core 12.2).
+     */
+    case RefreshedIdTokenMismatch = 'oidc_refreshed_id_token_mismatch';
+
+    /** The provider does not advertise the endpoint a call needs: userinfo, end_session or revocation. */
+    case EndpointNotSupported = 'oidc_endpoint_not_supported';
+
+    /** The userinfo endpoint refused the access token (401 or 403), for example because it expired or lacks the openid scope. */
+    case UserInfoRejected = 'oidc_userinfo_rejected';
+
+    /** The userinfo response names another sub than the ID token (OpenID Connect Core 5.3.4). */
+    case UserInfoSubjectMismatch = 'oidc_userinfo_subject_mismatch';
+
+    /** The revocation endpoint refused the request with an OAuth error (RFC 7009 2.2.1). */
+    case RevocationRejected = 'oidc_revocation_rejected';
+
+    /** A value passed to a package method is malformed, such as an empty refresh token. */
+    case ArgumentInvalid = 'oidc_argument_invalid';
+
+    /** Options passed when starting a logout are invalid, such as an empty id_token_hint or a post_logout_redirect_uri that is not a URL. */
+    case LogoutOptionsInvalid = 'oidc_logout_options_invalid';
+
+    /**
+     * A logout token breaks a rule of OpenID Connect Back-Channel Logout 1.0
+     * 2.6: no back-channel logout event, a nonce, neither sub nor sid, or no
+     * jti.
+     */
+    case LogoutTokenInvalid = 'oidc_logout_token_invalid';
+
+    /** A logout token with this jti was already accepted: a replay. */
+    case LogoutTokenReplayed = 'oidc_logout_token_replayed';
 }

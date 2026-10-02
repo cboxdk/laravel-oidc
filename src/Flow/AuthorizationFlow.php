@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cbox\Oidc\Flow;
 
 use Cbox\Oidc\Config\ConnectionConfig;
+use Cbox\Oidc\Config\GroupsSource;
 use Cbox\Oidc\Config\OidcConfig;
 use Cbox\Oidc\Contracts\TransactionStore;
 use Cbox\Oidc\Discovery\MetadataRepository;
@@ -21,6 +22,7 @@ use Cbox\Oidc\Support\OAuthError;
 use Cbox\Oidc\Tokens\IdTokenExpectations;
 use Cbox\Oidc\Tokens\IdTokenVerifier;
 use Cbox\Oidc\Tokens\TokenEndpoint;
+use Cbox\Oidc\UserInfo\UserInfoEndpoint;
 use Cbox\Ssrf\Contracts\UrlGuard;
 use Cbox\Ssrf\Exceptions\BlockedUrl;
 use Illuminate\Http\RedirectResponse;
@@ -46,7 +48,10 @@ use Psr\Clock\ClockInterface;
  * 5. the code is exchanged, with the PKCE verifier and the connection's
  *    client authentication;
  * 6. the ID token is verified ({@see IdTokenVerifier}) against the login's
- *    nonce and max_age, the access token's at_hash and the callback's iss.
+ *    nonce and max_age, the access token's at_hash and the callback's iss;
+ * 7. when the connection reads groups from userinfo, userinfo is called with
+ *    the access token ({@see UserInfoEndpoint}), and its groups go into the
+ *    claims.
  *
  * Give each connection its own callback route, and pass the connection to
  * callback(): a response for one connection then never reaches another.
@@ -59,6 +64,7 @@ final readonly class AuthorizationFlow
         private TransactionStore $transactions,
         private TokenEndpoint $tokens,
         private IdTokenVerifier $idTokens,
+        private UserInfoEndpoint $userInfo,
         private UrlGuard $guard,
         private ClockInterface $clock,
     ) {}
@@ -109,7 +115,7 @@ final readonly class AuthorizationFlow
      * @throws CallbackRejected when the callback fails a check before the token request
      * @throws AuthorizationDenied when the provider answered with an error
      * @throws TokenRejected when the ID token fails verification ({@see TenantRejected} for a tenant that is not allowed)
-     * @throws OidcException when the token request fails
+     * @throws OidcException when the token request fails, or userinfo when the connection reads groups from it
      */
     public function callback(Request $request, ?string $connection = null): CallbackResult
     {
@@ -138,8 +144,14 @@ final readonly class AuthorizationFlow
 
         $tokens = $this->tokens->exchangeCode($config, $metadata, $code, $transaction->codeVerifier, $transaction->redirectUri);
         $claims = $this->idTokens->verify($config, (string) $tokens->idToken, IdTokenExpectations::forLogin($transaction, $tokens->accessToken, $parameters->iss));
+        $userInfo = null;
 
-        return new CallbackResult($config->name, $claims, $tokens, $transaction, $parameters->iss);
+        if ($config->groups->source === GroupsSource::UserInfo) {
+            $userInfo = $this->userInfo->fetch($claims, $tokens->accessToken);
+            $claims = $claims->withGroups($userInfo->groups);
+        }
+
+        return new CallbackResult($config->name, $claims, $tokens, $transaction, $parameters->iss, $userInfo);
     }
 
     private function transaction(ConnectionConfig $config, CallbackParameters $parameters): AuthorizationTransaction

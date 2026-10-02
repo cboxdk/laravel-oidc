@@ -91,6 +91,64 @@ final class FakeProvider
 
     public string $tokenUrl;
 
+    public string $userinfoUrl;
+
+    public string $revocationUrl;
+
+    public string $endSessionUrl;
+
+    /** Whether a refresh returns a new refresh token, which replaces the old one. */
+    public bool $rotateRefreshTokens = true;
+
+    /** Whether a refresh returns a new ID token. */
+    public bool $idTokenOnRefresh = true;
+
+    /**
+     * Claims that replace those of the ID token a refresh returns (a null
+     * claim is left out).
+     *
+     * @var array<string, mixed>
+     */
+    public array $refreshClaims = [];
+
+    /**
+     * Claims that replace those userinfo returns (a null claim is left out).
+     *
+     * @var array<string, mixed>
+     */
+    public array $userInfoClaims = [];
+
+    /**
+     * Answers the userinfo endpoint instead of the provider's own logic when set.
+     *
+     * @var (Closure(Request): PromiseInterface)|null
+     */
+    public ?Closure $userInfoResponse = null;
+
+    /**
+     * Answers the revocation endpoint instead of the provider's own logic when set.
+     *
+     * @var (Closure(Request): PromiseInterface)|null
+     */
+    public ?Closure $revocationResponse = null;
+
+    /** @var list<array{form: array<array-key, mixed>, authorization: string|null}> */
+    public array $revocationRequests = [];
+
+    /** @var list<string|null> the Authorization header of each userinfo request */
+    public array $userInfoRequests = [];
+
+    /**
+     * The grants behind each live refresh token: the client and the claims of
+     * the login it came from.
+     *
+     * @var array<string, array{client: string, claims: array<string, mixed>}>
+     */
+    private array $refreshTokens = [];
+
+    /** @var array<string, array<string, mixed>> the ID token claims behind each live access token */
+    private array $accessTokens = [];
+
     /**
      * Answers the token endpoint instead of the provider's own logic when set.
      *
@@ -122,16 +180,19 @@ final class FakeProvider
         $this->jwksUrl = $endpoints.'/jwks';
         $this->authorizationUrl = $endpoints.'/authorize';
         $this->tokenUrl = $endpoints.'/token';
+        $this->userinfoUrl = $endpoints.'/userinfo';
+        $this->revocationUrl = $endpoints.'/revoke';
+        $this->endSessionUrl = $endpoints.'/logout';
         $this->assertionAudience = $this->tokenUrl;
 
         $this->discovery = [
             'issuer' => $issuer,
             'authorization_endpoint' => $this->authorizationUrl,
             'token_endpoint' => $this->tokenUrl,
-            'userinfo_endpoint' => $endpoints.'/userinfo',
+            'userinfo_endpoint' => $this->userinfoUrl,
             'jwks_uri' => $this->jwksUrl,
-            'end_session_endpoint' => $endpoints.'/logout',
-            'revocation_endpoint' => $endpoints.'/revoke',
+            'end_session_endpoint' => $this->endSessionUrl,
+            'revocation_endpoint' => $this->revocationUrl,
             'response_types_supported' => ['code'],
             'subject_types_supported' => ['public'],
             'id_token_signing_alg_values_supported' => ['RS256', 'ES256', 'EdDSA'],
@@ -201,6 +262,64 @@ final class FakeProvider
     }
 
     /**
+     * A valid logout token for client-1 (OpenID Connect Back-Channel Logout
+     * 1.0): iss, aud, iat, exp, jti, the back-channel logout event, sub and
+     * sid, typed logout+jwt, replaced by $claims (a null claim is left out).
+     *
+     * @param  array<string, mixed>  $claims
+     * @param  array<string, mixed>  $header
+     */
+    public function logoutToken(array $claims = [], SigningAlgorithm $algorithm = SigningAlgorithm::RS256, array $header = [], ?JWK $key = null): string
+    {
+        $now = $this->now();
+
+        return $this->sign($this->withoutNulls(array_replace([
+            'iss' => $this->issuerFor($claims),
+            'aud' => 'client-1',
+            'iat' => $now,
+            'exp' => $now + 120,
+            'jti' => bin2hex(random_bytes(16)),
+            'events' => ['http://schemas.openid.net/event/backchannel-logout' => new \stdClass],
+            'sub' => 'user-1',
+            'sid' => 'session-1',
+        ], $claims)), $algorithm, array_replace(['typ' => 'logout+jwt'], $header), $key);
+    }
+
+    /**
+     * A refresh token the provider honours, for the login of $claims, as if
+     * it had issued it with the login's tokens.
+     *
+     * @param  array<string, mixed>  $claims  the ID token claims of that login
+     */
+    public function issueRefreshToken(array $claims = [], string $client = 'client-1'): string
+    {
+        $token = bin2hex(random_bytes(16));
+        $this->refreshTokens[$token] = ['client' => $client, 'claims' => array_replace(['iss' => $this->issuerFor($claims), 'sub' => 'user-1', 'aud' => $client], $claims)];
+
+        return $token;
+    }
+
+    /**
+     * An access token the provider honours at userinfo, for the person of
+     * $claims.
+     *
+     * @param  array<string, mixed>  $claims
+     */
+    public function issueAccessToken(array $claims = []): string
+    {
+        $token = bin2hex(random_bytes(16));
+        $this->accessTokens[$token] = array_replace(['iss' => $this->issuerFor($claims), 'sub' => 'user-1'], $claims);
+
+        return $token;
+    }
+
+    /** Whether the refresh token is still live (issued and neither used up by rotation nor revoked). */
+    public function refreshTokenLive(string $token): bool
+    {
+        return isset($this->refreshTokens[$token]);
+    }
+
+    /**
      * Answers the provider's URLs from now on. Call after Http::fake() rules
      * of your own, if any; it adds to them.
      */
@@ -223,6 +342,8 @@ final class FakeProvider
                 return Factory::response($this->jwksBody ?? $this->json($this->jwks()), $this->jwksStatus, $headers);
             },
             $this->tokenUrl => $this->token(...),
+            $this->userinfoUrl => $this->userInfo(...),
+            $this->revocationUrl => $this->revocation(...),
         ]);
 
         return $this;
@@ -378,6 +499,10 @@ final class FakeProvider
             return $this->tokenError(401, 'invalid_client');
         }
 
+        if (($form['grant_type'] ?? null) === 'refresh_token') {
+            return $this->refresh($client, $form);
+        }
+
         if (($form['grant_type'] ?? null) !== 'authorization_code') {
             return $this->tokenError(400, 'unsupported_grant_type');
         }
@@ -394,7 +519,7 @@ final class FakeProvider
 
         $now = $this->now();
         $accessToken = bin2hex(random_bytes(16));
-        $idToken = $this->sign($this->withoutNulls(array_replace([
+        $claims = $this->withoutNulls(array_replace([
             'iss' => $this->issuerFor($issued['claims']),
             'sub' => 'user-1',
             'aud' => $client,
@@ -403,16 +528,116 @@ final class FakeProvider
             'auth_time' => $now,
             'nonce' => $issued['nonce'],
             'at_hash' => $this->idTokenAlgorithm->accessTokenHash($accessToken),
-        ], $issued['claims'])), $this->idTokenAlgorithm);
+        ], $issued['claims']));
+        $refreshToken = bin2hex(random_bytes(16));
+        $this->refreshTokens[$refreshToken] = ['client' => $client, 'claims' => $claims];
+        $this->accessTokens[$accessToken] = $claims;
 
         return Factory::response($this->json([
             'access_token' => $accessToken,
             'token_type' => 'Bearer',
             'expires_in' => 3600,
-            'refresh_token' => bin2hex(random_bytes(16)),
-            'id_token' => $idToken,
+            'refresh_token' => $refreshToken,
+            'id_token' => $this->sign($claims, $this->idTokenAlgorithm),
             'scope' => 'openid profile email',
         ]), 200, ['Content-Type' => 'application/json', 'Cache-Control' => 'no-store']);
+    }
+
+    /**
+     * The refresh_token grant: a new access token, a rotated refresh token
+     * and a new ID token for the same login, as $rotateRefreshTokens,
+     * $idTokenOnRefresh and $refreshClaims say.
+     *
+     * @param  array<array-key, mixed>  $form
+     */
+    private function refresh(string $client, array $form): PromiseInterface
+    {
+        $token = is_string($form['refresh_token'] ?? null) ? $form['refresh_token'] : '';
+        $grant = $this->refreshTokens[$token] ?? null;
+
+        if ($grant === null || $grant['client'] !== $client) {
+            return $this->tokenError(400, 'invalid_grant');
+        }
+
+        $now = $this->now();
+        $accessToken = bin2hex(random_bytes(16));
+        $original = $grant['claims'];
+        $claims = $this->withoutNulls(array_replace(
+            array_diff_key($original, ['at_hash' => true]),
+            ['iat' => $now, 'exp' => $now + 300, 'at_hash' => $this->idTokenAlgorithm->accessTokenHash($accessToken)],
+            $this->refreshClaims,
+        ));
+        $this->accessTokens[$accessToken] = $claims;
+        $response = ['access_token' => $accessToken, 'token_type' => 'Bearer', 'expires_in' => 3600];
+
+        if (is_string($form['scope'] ?? null)) {
+            $response['scope'] = $form['scope'];
+        }
+
+        if ($this->rotateRefreshTokens) {
+            unset($this->refreshTokens[$token]);
+            $response['refresh_token'] = bin2hex(random_bytes(16));
+            $this->refreshTokens[$response['refresh_token']] = ['client' => $client, 'claims' => $original];
+        }
+
+        if ($this->idTokenOnRefresh) {
+            $response['id_token'] = $this->sign($claims, $this->idTokenAlgorithm);
+        }
+
+        return Factory::response($this->json($response), 200, ['Content-Type' => 'application/json', 'Cache-Control' => 'no-store']);
+    }
+
+    private function userInfo(Request $request): PromiseInterface
+    {
+        $authorization = $request->header('Authorization')[0] ?? null;
+        $this->userInfoRequests[] = $authorization;
+
+        if ($this->userInfoResponse instanceof Closure) {
+            return ($this->userInfoResponse)($request);
+        }
+
+        $token = $authorization !== null && str_starts_with($authorization, 'Bearer ') ? substr($authorization, 7) : '';
+        $claims = $this->accessTokens[$token] ?? null;
+
+        if ($claims === null) {
+            return Factory::response('', 401, ['WWW-Authenticate' => 'Bearer error="invalid_token", error_description="The access token expired"']);
+        }
+
+        $document = $this->withoutNulls(array_replace(
+            array_intersect_key($claims, array_flip(['sub', 'email', 'email_verified', 'name', 'groups'])),
+            $this->userInfoClaims,
+        ));
+
+        return Factory::response($this->json($document), 200, ['Content-Type' => 'application/json']);
+    }
+
+    private function revocation(Request $request): PromiseInterface
+    {
+        $form = $request->data();
+        $authorization = $request->header('Authorization')[0] ?? null;
+        $this->revocationRequests[] = ['form' => $form, 'authorization' => $authorization];
+
+        if ($this->revocationResponse instanceof Closure) {
+            return ($this->revocationResponse)($request);
+        }
+
+        $client = $this->authenticate($form, $authorization);
+
+        if ($client === null) {
+            return $this->tokenError(401, 'invalid_client');
+        }
+
+        $token = is_string($form['token'] ?? null) ? $form['token'] : '';
+
+        // RFC 7009 2.2: a token of another client is not revoked, and the
+        // answer is the same 200.
+        if (($this->refreshTokens[$token]['client'] ?? null) === $client) {
+            unset($this->refreshTokens[$token]);
+        }
+
+        unset($this->accessTokens[$token]);
+
+        return Factory::response('', 200);
     }
 
     /**

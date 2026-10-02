@@ -25,7 +25,7 @@ behind key handling.
 
 | Requirement | Version |
 |---|---|
-| Laravel (`illuminate/contracts`, `illuminate/http`, `illuminate/support`) | `^12.0 \|\| ^13.0` |
+| Laravel (`illuminate/contracts`, `illuminate/http`, `illuminate/routing`, `illuminate/support`) | `^12.0 \|\| ^13.0` |
 
 Registered through package auto-discovery, so no manual provider wiring.
 
@@ -37,3 +37,4 @@ Registered through package auto-discovery, so no manual provider wiring.
 | `cboxdk/laravel-ssrf` | `^1.5` | Guards every outbound call to a provider. |
 | `guzzlehttp/guzzle` | `^7.8.2 \|\| ^8.0` | The transport under Laravel's HTTP client; the size limit uses its `on_headers` and `progress` options. |
 | `psr/clock` | `^1.0` | Time comes from a PSR-20 clock, so tests can freeze it. |
+| `psr/log` | `^1.1 \|\| ^2.0 \|\| ^3.0` | The back-channel logout route logs refused logout tokens. |

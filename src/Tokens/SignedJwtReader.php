@@ -89,7 +89,7 @@ final readonly class SignedJwtReader
             throw TokenRejected::signatureInvalid($kind, $name, is_string($keyId) ? sprintf('"%s"', $keyId) : 'without a kid');
         }
 
-        return new SignedJwt($header, $this->claims($kind, $name, $parts[2]), $algorithm, $key);
+        return new SignedJwt($header, $this->claims($kind, $name, $parts[2]), $algorithm, $key, (string) Base64Url::decode($parts[2]));
     }
 
     /**

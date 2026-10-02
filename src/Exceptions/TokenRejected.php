@@ -40,7 +40,10 @@ class TokenRejected extends OidcException
         return static::make(
             ErrorCode::TokenTypeInvalid,
             sprintf('The %s of connection "%s" has the typ "%s", the type of another kind of token.', $kind->label(), $connection, self::shorten($type)),
-            sprintf('Only an %s is accepted here. A logout or access token offered in its place is refused on purpose (RFC 8725 3.11).', $kind->label()),
+            match ($kind) {
+                TokenKind::IdToken => 'Only an ID token is accepted here. A logout or access token offered in its place is refused on purpose (RFC 8725 3.11).',
+                TokenKind::LogoutToken => 'Only a logout token (typ logout+jwt, JWT or none) is accepted here. Another kind of token offered in its place is refused on purpose (RFC 8725 3.11).',
+            },
             'typ',
         );
     }
@@ -165,6 +168,20 @@ class TokenRejected extends OidcException
             sprintf('The at_hash of the ID token of connection "%s" does not match the access token it came with.', $connection),
             'Start the login again. The access token was swapped on the way, or the provider computes at_hash with another hash than OpenID Connect Core 3.1.3.6 prescribes.',
             'at_hash',
+        );
+    }
+
+    /**
+     * An ID token that came back from a refresh does not belong to the login
+     * it renews (OpenID Connect Core 12.2).
+     */
+    public static function refreshMismatch(string $connection, string $claim, string $problem): self
+    {
+        return static::make(
+            ErrorCode::RefreshedIdTokenMismatch,
+            sprintf('The ID token the refresh of connection "%s" returned %s.', $connection, $problem),
+            'Sign the person in again and drop the refresh token: a refreshed ID token must name the same issuer, subject and authentication as the login it renews, so this one belongs to someone or something else.',
+            $claim,
         );
     }
 

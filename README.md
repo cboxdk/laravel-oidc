@@ -7,11 +7,11 @@ verification, and hands your application a typed, verified result.
 
 > **Status: in development, not released.** Version 0.1 is being built in
 > slices. Today the package has its typed, multi-connection configuration,
-> discovery and signing-key handling behind the SSRF guard, and the
+> discovery and signing-key handling behind the SSRF guard, the
 > authorization code flow through full ID token verification with issuer and
-> tenant pinning. Refresh, userinfo, logout, back-channel logout and the
-> testing fake land in the next slices. The [changelog](CHANGELOG.md) lists
-> what exists.
+> tenant pinning, refresh, userinfo, RP-initiated logout, revocation and
+> back-channel logout. The facade and the testing fake land in the next
+> slice. The [changelog](CHANGELOG.md) lists what exists.
 
 ## Why
 
@@ -41,10 +41,11 @@ with the cryptography left to an established library.
 - Issuer and tenant pinning: Microsoft Entra multi-tenant (`{tenantid}` checked
   against `tid`, with per-tenant allow-lists) and the Google Workspace `hd`
   claim. Done.
-- Refresh tokens, userinfo (with the `sub` match), RP-initiated logout and token
-  revocation.
+- Refresh tokens (the new ID token checked against the login it renews),
+  userinfo (with the `sub` match), RP-initiated logout and token revocation.
+  Done.
 - A back-channel logout receiver that verifies the logout token and dispatches a
-  Laravel event, with `jti` replay protection.
+  Laravel event, with `jti` replay protection. Done.
 - A testing fake for your application's tests.
 
 Cryptography (JWK and JWKS parsing, signature verification, claim checks) comes
@@ -114,6 +115,49 @@ as `prompt`, `max_age` and `login_hint` and the full example with error
 handling, and [ID token verification](docs/core-concepts/id-token-verification.md)
 for every rule and the Google and Entra tenant policies.
 
+### Refresh and userinfo
+
+```php
+use Cbox\Oidc\Tokens\TokenRefresher;
+use Cbox\Oidc\UserInfo\UserInfoEndpoint;
+
+$renewed = app(TokenRefresher::class)->refresh($claims, $refreshToken);
+// Keep $renewed->refreshToken and $renewed->claims from now on.
+
+$info = app(UserInfoEndpoint::class)->fetch($renewed->claims, $renewed->tokens->accessToken);
+```
+
+A refreshed ID token must name the same issuer, subject and tenant as the
+login it renews. See [refresh and userinfo](docs/core-concepts/refresh-and-userinfo.md).
+
+### Logout
+
+```php
+use Cbox\Oidc\Logout\LogoutFlow;
+use Cbox\Oidc\Logout\LogoutOptions;
+
+// After ending your own session: log out at the provider too, or go home
+// when it has no end_session_endpoint.
+return app(LogoutFlow::class)->redirect(options: new LogoutOptions(idTokenHint: $idToken), fallback: '/');
+```
+
+For back-channel logout, register the receiver and listen for its event:
+
+```php
+use Cbox\Oidc\Events\BackChannelLogoutReceived;
+
+Route::oidcBackChannelLogout('oidc/{connection}/backchannel-logout'); // routes/api.php
+
+Event::listen(function (BackChannelLogoutReceived $event) {
+    // End your sessions of $event->token->issuer with $event->token->sessionId,
+    // or of $event->token->subject when there is no sid.
+});
+```
+
+The logout token is verified like an ID token, must carry the back-channel
+logout event and no nonce, and each `jti` is accepted once. See
+[logout](docs/core-concepts/logout.md), which also covers token revocation.
+
 ## Errors
 
 Every exception extends `OidcException` and carries a stable code and a fix.
@@ -125,7 +169,9 @@ See [errors](docs/core-concepts/errors.md) for the list.
   no tokens to others.
 - Encrypted ID tokens (JWE), signed userinfo responses, pushed authorization
   requests (PAR), DPoP and the form_post response mode are not part of 0.1.
-- Front-channel logout is not supported.
+- Front-channel logout is not supported. Back-channel logout verifies the
+  token and dispatches an event; ending the sessions it names is up to your
+  application.
 - The SSRF guard is defence in depth: a network egress allow-list is the only
   complete control. See the guard's own documentation.
 - Provider calls are https only and never follow redirects, so a provider
@@ -153,6 +199,10 @@ runs Pint, Rector, PHPStan at level max, the Pest suites, the license check and
 - [Installation](docs/getting-started/installation.md)
 - [Configuration reference](docs/configuration/reference.md)
 - [Discovery and keys](docs/core-concepts/discovery-and-keys.md)
+- [The login flow](docs/core-concepts/login-flow.md)
+- [ID token verification](docs/core-concepts/id-token-verification.md)
+- [Refresh and userinfo](docs/core-concepts/refresh-and-userinfo.md)
+- [Logout](docs/core-concepts/logout.md)
 - [Errors](docs/core-concepts/errors.md)
 - [HTTP client and clock](docs/extension-points/http-client.md)
 - [Security](docs/security/_index.md)

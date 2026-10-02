@@ -54,3 +54,8 @@ Then add a login route and a callback route; [the login flow](core-concepts/logi
 has a complete, tested example. The callback exchanges the code, verifies the
 ID token and returns its verified claims; sign the person in by
 `$result->claims->issuer` and `$result->claims->subject`.
+
+To keep a session alive past the access token's lifetime, see
+[refresh and userinfo](core-concepts/refresh-and-userinfo.md); to log out at
+the provider too, and to receive its back-channel logout, see
+[logout](core-concepts/logout.md).

@@ -16,12 +16,14 @@ final readonly class SignedJwt
 {
     /**
      * @param  array<string, mixed>  $header  the protected header
-     * @param  array<string, mixed>  $claims  the payload
+     * @param  array<string, mixed>  $claims  the payload, decoded
+     * @param  string  $payload  the payload as JSON text, for the rare check that must tell {} from []
      */
     public function __construct(
         public array $header,
         public array $claims,
         public SigningAlgorithm $algorithm,
         public JWK $key,
+        public string $payload = '{}',
     ) {}
 }
