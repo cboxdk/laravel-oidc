@@ -145,6 +145,28 @@ it('reports a network failure as ProviderUnavailable', function (): void {
         });
 });
 
+it('asks for an uncompressed body and refuses a compressed one (gzip bomb)', function (string $encoding): void {
+    config(['oidc.http.max_response_bytes' => 4096]);
+    // 1 MiB of zeros, about 1 KiB on the wire: well within the limit.
+    $bomb = (string) gzencode(str_repeat("\0", 1024 * 1024), 9);
+    expect(strlen($bomb))->toBeLessThan(4096);
+    Http::fake(['https://idp.example.test/keys' => Http::response($bomb, 200, ['Content-Encoding' => $encoding, 'Content-Type' => 'application/json'])]);
+
+    expect(fn (): HttpResponse => resolve(HttpClient::class)->send(HttpRequest::get('https://idp.example.test/keys', ['Accept-Encoding' => 'gzip'])))
+        ->toThrow(function (InvalidProviderResponse $exception) use ($encoding): void {
+            expect($exception->errorCode())->toBe(ErrorCode::ProviderResponseInvalid)
+                ->and($exception->getMessage())->toContain(sprintf('is compressed (Content-Encoding %s)', strtolower(trim($encoding))));
+        });
+
+    Http::assertSent(fn (Request $request): bool => $request->header('Accept-Encoding') === ['identity']);
+})->with(['gzip', 'deflate', 'br', ' GZIP ']);
+
+it('accepts an identity-encoded body', function (): void {
+    Http::fake(['https://idp.example.test/doc' => Http::response('{}', 200, ['Content-Encoding' => 'identity'])]);
+
+    expect(resolve(HttpClient::class)->send(HttpRequest::get('https://idp.example.test/doc'))->body)->toBe('{}');
+});
+
 it('applies the configured timeouts and refuses redirects in the Guzzle options', function (): void {
     config(['oidc.http.timeout_seconds' => 3, 'oidc.http.connect_timeout_seconds' => 1.5]);
     $seen = [];
@@ -156,7 +178,7 @@ it('applies the configured timeouts and refuses redirects in the Guzzle options'
 
     resolve(HttpClient::class)->send(HttpRequest::get('https://idp.example.test/doc'));
 
-    expect($seen)->toMatchArray(['allow_redirects' => false, 'timeout' => 3.0, 'connect_timeout' => 1.5])
+    expect($seen)->toMatchArray(['allow_redirects' => false, 'decode_content' => false, 'timeout' => 3.0, 'connect_timeout' => 1.5])
         ->and($seen)->toHaveKeys(['on_headers', 'progress']);
 });
 

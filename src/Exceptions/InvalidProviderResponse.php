@@ -33,6 +33,15 @@ class InvalidProviderResponse extends OidcException
         );
     }
 
+    public static function encoded(string $url, string $encoding): self
+    {
+        return new self(
+            ErrorCode::ProviderResponseInvalid,
+            sprintf('The response from %s is compressed (Content-Encoding %s), although the request asked for identity encoding.', Url::withoutQuery($url), substr((string) preg_replace('/[^\x21-\x7E ]/', '?', $encoding), 0, 64)),
+            'Configure the provider, or the proxy or CDN in front of it, to honour Accept-Encoding: identity. Compressed bodies are refused because they can expand past oidc.http.max_response_bytes.',
+        );
+    }
+
     public static function malformed(string $url, string $what, string $problem, ?Throwable $previous = null): self
     {
         return new self(

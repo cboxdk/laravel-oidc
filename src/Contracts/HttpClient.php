@@ -22,7 +22,8 @@ use Cbox\Oidc\Http\LaravelHttpClient;
  *
  * - https only, and the URL checked against SSRF before it is sent;
  * - redirects never followed (a 3xx comes back as a response);
- * - the body capped at the configured size.
+ * - the body capped at the configured size, and never decompressed (a
+ *   compressed body can expand past the cap).
  */
 interface HttpClient
 {

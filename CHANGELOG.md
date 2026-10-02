@@ -221,3 +221,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   again. Before, `KeySetRepository::forget()` left Octane, Horizon and queue
   workers verifying with a withdrawn key until their copy went stale, up to
   `jwks_max_ttl_seconds`.
+- **No decompression of provider responses.** `LaravelHttpClient` sends
+  `Accept-Encoding: identity`, turns off curl's content decoding and refuses a
+  response with another `Content-Encoding` (`oidc_provider_response_invalid`).
+  Before, the size limit counted compressed bytes on the wire, so a small gzip
+  body from a hostile provider or CDN could expand to hundreds of megabytes in
+  memory.

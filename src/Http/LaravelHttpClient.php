@@ -27,6 +27,10 @@ use Throwable;
  * - Redirects are never followed.
  * - Timeouts and the body size limit come from oidc.http. The size is checked
  *   from Content-Length, while the body downloads, and once more at the end.
+ * - Bodies are never decompressed: the request asks for identity encoding,
+ *   curl is told not to decode, and a response with any other
+ *   Content-Encoding is refused. A small gzip body could otherwise expand
+ *   past the size limit, which counts the bytes on the wire.
  */
 final readonly class LaravelHttpClient implements HttpClient
 {
@@ -38,11 +42,11 @@ final readonly class LaravelHttpClient implements HttpClient
     public function send(HttpRequest $request): HttpResponse
     {
         $pending = $this->http
-            ->withOptions(['allow_redirects' => false, ...self::sizeLimitOptions($this->config->maxResponseBytes)])
+            ->withOptions(['allow_redirects' => false, 'decode_content' => false, ...self::sizeLimitOptions($this->config->maxResponseBytes)])
             ->withMiddleware(new GuardRequestMiddleware(['https']))
             ->timeout($this->config->timeoutSeconds)
             ->connectTimeout($this->config->connectTimeoutSeconds)
-            ->withHeaders($request->headers);
+            ->withHeaders([...$request->headers, 'Accept-Encoding' => 'identity']);
 
         try {
             $response = match ($request->method) {
@@ -92,6 +96,12 @@ final readonly class LaravelHttpClient implements HttpClient
 
         foreach ($response->toPsrResponse()->getHeaders() as $name => $values) {
             $headers[strtolower($name)] = implode(', ', $values);
+        }
+
+        $encoding = strtolower(trim($headers['content-encoding'] ?? ''));
+
+        if ($encoding !== '' && $encoding !== 'identity') {
+            throw InvalidProviderResponse::encoded($url, $encoding);
         }
 
         return new HttpResponse($response->status(), $headers, $body);

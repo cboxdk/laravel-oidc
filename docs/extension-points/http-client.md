@@ -27,7 +27,10 @@ client, so `Http::fake()` answers it in your tests. It:
   refuses it;
 - applies `oidc.http.timeout_seconds` and `connect_timeout_seconds`;
 - caps the body at `oidc.http.max_response_bytes`, from `Content-Length`, while
-  it downloads and once more at the end.
+  it downloads and once more at the end;
+- never decompresses: it sends `Accept-Encoding: identity`, turns off curl's
+  decoding, and refuses a response with another `Content-Encoding`, because a
+  small gzip body can expand far past the cap.
 
 To change how calls are sent, bind your own implementation in a service
 provider's `register()`. It must keep those rules. The simplest way is to wrap

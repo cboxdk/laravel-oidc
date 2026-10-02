@@ -32,7 +32,8 @@ the class of report we most want.
   or metadata address. The guard checks the URL actually sent and pins the
   resolved address.
 - Redirects are never followed, and bodies are capped at
-  `oidc.http.max_response_bytes`.
+  `oidc.http.max_response_bytes`. Bodies are never decompressed, so a small
+  gzip response cannot expand past the cap.
 - A discovery document must name exactly the configured issuer, and every
   endpoint in it must be https.
 - JSON with the same key twice is refused, so the package and the provider
