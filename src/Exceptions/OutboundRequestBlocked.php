@@ -20,7 +20,7 @@ class OutboundRequestBlocked extends OidcException
         return new self(
             ErrorCode::HttpBlocked,
             sprintf('The SSRF guard refused a call to %s: %s', Url::origin($url), $previous->getMessage()),
-            'Point the connection at the provider\'s public https address. For a provider on a private network, change config/ssrf.php on purpose; a network egress allow-list is the complete control.',
+            'Point the connection at the provider\'s public https address. For a provider on a private network, change config/ssrf.php on purpose; a network egress allow-list is the complete control. For a provider on your own machine during development, set SSRF_ENFORCE=false in .env and use 127.0.0.1 rather than localhost (see the Keycloak page of the docs).',
             $previous,
         );
     }

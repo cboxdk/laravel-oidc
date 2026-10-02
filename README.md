@@ -139,9 +139,12 @@ See [errors](docs/core-concepts/errors.md) for the list.
   application.
 - The SSRF guard is defence in depth: a network egress allow-list is the only
   complete control.
-- Provider calls are https only and never follow redirects, so a provider
-  running on a private network or on `localhost` is refused unless you change
-  `config/ssrf.php` on purpose.
+- Provider calls are https only and never follow redirects. A provider on a
+  private network is refused unless you change `config/ssrf.php` on purpose.
+  For a provider on your own machine during development, such as Keycloak in
+  Docker on `http://127.0.0.1:8080`, see
+  [local development](docs/providers/keycloak.md#local-development):
+  `allow_insecure_http`, which only `APP_ENV=local` or `testing` accepts.
 - A key set can stay cached for up to `jwks_max_ttl_seconds` (plus
   `stale_if_error_seconds` during an outage). When a provider withdraws a
   compromised key, drop the cache yourself; every process that shares the

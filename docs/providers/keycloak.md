@@ -49,3 +49,34 @@ return [
   receiver, such as `https://app.example.com/oidc/keycloak/backchannel-logout`
   (see [back-channel logout](../core-concepts/logout.md#back-channel-logout)),
   and turn "Backchannel logout session required" on to receive `sid`.
+
+## Local development
+
+Keycloak in Docker answers on `http://127.0.0.1:8080`, without TLS. Two
+switches let the package call it, and both are for your machine only:
+
+- `allow_insecure_http` (`OIDC_ALLOW_INSECURE_HTTP`) lets the issuer and the
+  realm's endpoints be plain http. The package refuses it unless `APP_ENV` is
+  `local` or `testing`, and `oidc:check` warns while it is on.
+- `SSRF_ENFORCE=false` turns off the SSRF guard's address checks, which
+  refuse loopback and private addresses. Use `127.0.0.1` rather than
+  `localhost`: the guard refuses the name `localhost` even then.
+
+Start Keycloak with `docker run -p 8080:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin
+-e KC_BOOTSTRAP_ADMIN_PASSWORD=admin quay.io/keycloak/keycloak start-dev`,
+create a realm and a confidential client, and open the app at
+`http://127.0.0.1:8000`, so the realm's issuer and the redirect URI use the
+same host as the calls. Then, in `.env`:
+
+<!-- example: keycloak-local-env -->
+```dotenv
+APP_ENV=local
+OIDC_ISSUER=http://127.0.0.1:8080/realms/dev
+OIDC_ALLOW_INSECURE_HTTP=true
+OIDC_CLIENT_ID=my-app
+OIDC_CLIENT_SECRET=secret-from-the-credentials-tab
+OIDC_REDIRECT_URI=http://127.0.0.1:8000/oidc/callback
+SSRF_ENFORCE=false
+```
+
+Keep these lines out of every other environment's `.env`.

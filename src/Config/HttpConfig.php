@@ -6,6 +6,11 @@ namespace Cbox\Oidc\Config;
 
 /**
  * Limits for the outbound calls to the providers.
+ *
+ * $allowInsecureHttp is not read from oidc.http: it is on when a connection
+ * sets allow_insecure_http, which only a local or testing environment
+ * accepts, and lets the client send plain http to the URLs such a connection
+ * has checked.
  */
 readonly class HttpConfig
 {
@@ -13,7 +18,13 @@ readonly class HttpConfig
         public float $timeoutSeconds = 5.0,
         public float $connectTimeoutSeconds = 2.0,
         public int $maxResponseBytes = 262144,
+        public bool $allowInsecureHttp = false,
     ) {}
+
+    public function withInsecureHttp(): self
+    {
+        return new self($this->timeoutSeconds, $this->connectTimeoutSeconds, $this->maxResponseBytes, true);
+    }
 
     public static function fromConfig(ConfigReader $config): self
     {

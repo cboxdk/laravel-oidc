@@ -64,7 +64,7 @@ final readonly class LogoutFlow
         $url = $this->url($config, $endpoint, $options);
 
         try {
-            $this->guard->assertSafeRedirect($url, ['https']);
+            $this->guard->assertSafeRedirect($url, $config->schemes());
         } catch (BlockedUrl $exception) {
             throw OutboundRequestBlocked::redirect($url, $exception);
         }

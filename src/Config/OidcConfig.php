@@ -28,7 +28,10 @@ readonly class OidcConfig
         public FlowConfig $flow = new FlowConfig,
     ) {}
 
-    public static function fromArray(mixed $values): self
+    /**
+     * @param  bool  $development  whether the application runs in a local or testing environment; only then may a connection set allow_insecure_http
+     */
+    public static function fromArray(mixed $values, bool $development = false): self
     {
         $config = ConfigReader::of($values, 'oidc');
         $connectionsConfig = $config->child('connections');
@@ -40,7 +43,7 @@ readonly class OidcConfig
                 throw InvalidConfiguration::at($connectionsConfig->key($name), 'is not a valid connection name', 'Name connections with letters, digits, dots, dashes and underscores, at most 64 characters.');
             }
 
-            $connection = ConnectionConfig::fromConfig($name, $connectionsConfig->child($name));
+            $connection = ConnectionConfig::fromConfig($name, $connectionsConfig->child($name), $development);
             $callback = Url::callbackTarget($connection->redirectUri);
 
             // A callback shared by two connections cannot tell their responses
@@ -68,10 +71,16 @@ readonly class OidcConfig
             throw InvalidConfiguration::at('oidc.default', sprintf('names "%s", which is not a configured connection', $default), sprintf('Set oidc.default (OIDC_CONNECTION) to one of %s.', implode(', ', array_keys($connections))));
         }
 
+        $http = $config->has('http') ? HttpConfig::fromConfig($config->child('http')) : new HttpConfig;
+
+        if (array_any($connections, static fn (ConnectionConfig $connection): bool => $connection->allowInsecureHttp)) {
+            $http = $http->withInsecureHttp();
+        }
+
         return new self(
             $default,
             $connections,
-            $config->has('http') ? HttpConfig::fromConfig($config->child('http')) : new HttpConfig,
+            $http,
             $config->has('cache') ? CacheConfig::fromConfig($config->child('cache')) : new CacheConfig,
             $config->has('flow') ? FlowConfig::fromConfig($config->child('flow')) : new FlowConfig,
         );

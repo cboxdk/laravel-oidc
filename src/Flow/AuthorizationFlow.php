@@ -96,7 +96,7 @@ final readonly class AuthorizationFlow
         );
 
         $url = AuthorizationUrl::build($config, $metadata, $transaction, $options);
-        $this->assertSafeRedirect($url);
+        $this->assertSafeRedirect($url, $config);
         $this->transactions->put($transaction);
 
         return new AuthorizationRequest($config->name, $url, $transaction->state);
@@ -247,10 +247,10 @@ final readonly class AuthorizationFlow
         }
     }
 
-    private function assertSafeRedirect(string $url): void
+    private function assertSafeRedirect(string $url, ConnectionConfig $config): void
     {
         try {
-            $this->guard->assertSafeRedirect($url, ['https']);
+            $this->guard->assertSafeRedirect($url, $config->schemes());
         } catch (BlockedUrl $exception) {
             throw OutboundRequestBlocked::redirect($url, $exception);
         }

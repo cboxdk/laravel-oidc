@@ -64,14 +64,14 @@ final readonly class ProviderMetadata
             throw DiscoveryFailed::issuerMismatch($connection->name, $connection->issuer, $issuer);
         }
 
-        $endpoint = static function (string $name, bool $required) use ($document, $invalid): ?string {
+        $endpoint = static function (string $name, bool $required) use ($document, $invalid, $connection): ?string {
             $value = $document[$name] ?? null;
 
             if ($value === null && ! $required) {
                 return null;
             }
 
-            if (! HttpsUrl::valid($value)) {
+            if (! HttpsUrl::valid($value, $connection->allowInsecureHttp)) {
                 throw $invalid(
                     $value === null ? sprintf('has no %s', $name) : sprintf('has %s set to something other than an https URL', $name),
                     sprintf('The provider must publish %s as an absolute https URL; the package calls nothing else.', $name),

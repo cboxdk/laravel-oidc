@@ -34,6 +34,12 @@ return [
             // Null means issuer + /.well-known/openid-configuration.
             'discovery_url' => env('OIDC_DISCOVERY_URL'),
 
+            // Development only: lets the issuer and the provider's endpoints
+            // be plain http, for a provider on your own machine (Keycloak in
+            // Docker on http://127.0.0.1:8080). Refused unless APP_ENV is
+            // local or testing.
+            'allow_insecure_http' => env('OIDC_ALLOW_INSECURE_HTTP', false),
+
             'client_id' => env('OIDC_CLIENT_ID'),
             'client_secret' => env('OIDC_CLIENT_SECRET'),
 

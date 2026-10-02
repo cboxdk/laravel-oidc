@@ -23,7 +23,9 @@ use Throwable;
  * The default {@see HttpClient}: Laravel's HTTP client (so Http::fake() works
  * in your tests) with the cboxdk/laravel-ssrf guard in its handler stack.
  *
- * - The guard checks and DNS-pins the URL actually sent, https only.
+ * - The guard checks and DNS-pins the URL actually sent, https only (plain
+ *   http too only when a connection sets allow_insecure_http, which a local or
+ *   testing environment alone accepts).
  * - Redirects are never followed.
  * - Timeouts and the body size limit come from oidc.http. The size is checked
  *   from Content-Length, while the body downloads, and once more at the end.
@@ -43,7 +45,7 @@ final readonly class LaravelHttpClient implements HttpClient
     {
         $pending = $this->http
             ->withOptions(['allow_redirects' => false, 'decode_content' => false, ...self::sizeLimitOptions($this->config->maxResponseBytes)])
-            ->withMiddleware(new GuardRequestMiddleware(['https']))
+            ->withMiddleware(new GuardRequestMiddleware($this->config->allowInsecureHttp ? ['http', 'https'] : ['https']))
             ->timeout($this->config->timeoutSeconds)
             ->connectTimeout($this->config->connectTimeoutSeconds)
             ->withHeaders([...$request->headers, 'Accept-Encoding' => 'identity']);

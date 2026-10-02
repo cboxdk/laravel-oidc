@@ -17,7 +17,8 @@ the class of report we most want.
 
 - `alg: none` and the `HS*` algorithms cannot be configured for ID tokens.
 - The issuer must be https, without a query or fragment, so it can be compared
-  exactly with the provider's metadata.
+  exactly with the provider's metadata. Plain http takes `allow_insecure_http`,
+  which is refused unless `APP_ENV` is `local` or `testing`.
 - A Microsoft Entra issuer template (`{tenantid}`) cannot be configured without
   a tenant policy on `tid`; accepting any tenant takes an explicit `['*']`.
 - Protocol parameters the package sets itself (`state`, `nonce`, the PKCE

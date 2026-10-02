@@ -87,6 +87,14 @@ final readonly class ConnectionDiagnostics
     {
         $findings = [Finding::pass('configuration', sprintf('Issuer %s, client %s, client_auth %s.', $config->issuer, $config->clientId, $config->clientAuth->value))];
 
+        if ($config->allowInsecureHttp) {
+            $findings[] = Finding::warn(
+                'insecure http',
+                'allow_insecure_http is on: the provider may be called over plain http, so codes, tokens and the client secret cross the network unencrypted. Accepted only because APP_ENV is local or testing.',
+                sprintf('Remove oidc.connections.%s.allow_insecure_http before the configuration leaves your machine.', $config->name),
+            );
+        }
+
         $sharing = $this->sharedAssertionKey($config, $all);
 
         if ($sharing !== []) {

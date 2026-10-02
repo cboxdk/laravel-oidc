@@ -34,6 +34,7 @@ lists the configured names.
 |---|---|---|
 | `issuer` | required | https, absolute, no user info, query or fragment. Compared exactly with the provider's metadata, so write it as the provider does, trailing slash or not. May contain `{tenantid}` once (Microsoft Entra multi-tenant). |
 | `discovery_url` | `issuer` + `/.well-known/openid-configuration` | https. Required when the issuer contains `{tenantid}`. |
+| `allow_insecure_http` | `false` | Development only. Lets the issuer, `discovery_url` and the provider's endpoints be plain http, for a provider on your own machine. Refused unless `APP_ENV` is `local` or `testing`; `oidc:check` warns while it is on. See [local Keycloak](../providers/keycloak.md#local-development). |
 | `client_id` | required | Non-empty. |
 | `client_secret` | `null` | Required for `client_secret_basic` and `client_secret_post`; dropped for the others. Redacted when the connection is dumped. |
 | `client_auth` | `client_secret_basic` | `client_secret_basic`, `client_secret_post`, `private_key_jwt` (see `client_assertion`) or `none` (public client, PKCE only). |
@@ -61,7 +62,7 @@ configuration is parsed, so a wrong key fails at once.
 | `passphrase` | `null` | For an encrypted key. |
 | `key_id` | `null` | Sent as the `kid` header. |
 | `algorithm` | `RS256` | One of the ID token algorithms. The key must fit it: RSA of at least 2048 bits, EC on its curve, or Ed25519 for `EdDSA`. When the provider lists `token_endpoint_auth_signing_alg_values_supported`, it must be there. |
-| `audience` | `token_endpoint` | `token_endpoint` (OpenID Connect Core; Entra and Okta require it) or `issuer` (not with a `{tenantid}` issuer). |
+| `audience` | `endpoint` | `endpoint`: the URL the assertion is sent to, the token endpoint for logins and refreshes (OpenID Connect Core; Entra and Okta require it) and the revocation endpoint for revocations. Or `issuer` (RFC 7523bis; not with a `{tenantid}` issuer). |
 | `headers` | `[]` | Extra header members, such as Entra's `x5t#S256`. `alg`, `kid`, `typ`, `crit`, `jku`, `jwk`, `x5u`, `b64`, `enc` and `zip` are refused. |
 | `lifetime_seconds` | `60` | 10 to 600. |
 

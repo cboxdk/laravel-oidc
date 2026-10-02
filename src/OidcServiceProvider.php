@@ -62,7 +62,7 @@ class OidcServiceProvider extends ServiceProvider
         // OIDC call names the missing key.
         $this->app->singleton(
             OidcConfig::class,
-            static fn (Application $app): OidcConfig => OidcConfig::fromArray($app->make(Repository::class)->get('oidc')),
+            static fn (Application $app): OidcConfig => OidcConfig::fromArray($app->make(Repository::class)->get('oidc'), $app->environment(['local', 'testing'])),
         );
 
         $this->app->singleton(HttpConfig::class, static fn (Application $app): HttpConfig => $app->make(OidcConfig::class)->http);

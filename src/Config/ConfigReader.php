@@ -107,6 +107,21 @@ readonly class ConfigReader
         return $this->has($key) ? $this->int($key, $min, $min, $max) : null;
     }
 
+    public function bool(string $key, bool $default): bool
+    {
+        $value = $this->values[$key] ?? $default;
+
+        if (is_string($value) && in_array(strtolower($value), ['true', 'false', '1', '0'], true)) {
+            $value = in_array(strtolower($value), ['true', '1'], true);
+        }
+
+        if (! is_bool($value)) {
+            throw InvalidConfiguration::at($this->key($key), 'must be true or false', sprintf('Set %s to true or false.', $this->key($key)));
+        }
+
+        return $value;
+    }
+
     public function float(string $key, float $default, float $min, float $max): float
     {
         $value = $this->values[$key] ?? $default;
@@ -176,11 +191,12 @@ readonly class ConfigReader
     }
 
     /**
-     * An https URL without user info or fragment.
+     * An https URL without user info or fragment; with $insecureHttp, plain
+     * http too (allow_insecure_http, local development only).
      */
-    public function httpsUrl(string $key, ?string $value = null): string
+    public function httpsUrl(string $key, ?string $value = null, bool $insecureHttp = false): string
     {
-        return $this->url($key, $value ?? $this->string($key), ['https']);
+        return $this->url($key, $value ?? $this->string($key), $insecureHttp ? ['http', 'https'] : ['https']);
     }
 
     /**

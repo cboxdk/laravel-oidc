@@ -4,18 +4,31 @@ declare(strict_types=1);
 
 namespace Cbox\Oidc\Tests\Support;
 
+use Cbox\Oidc\Config\CacheConfig;
+use Cbox\Oidc\Config\FlowConfig;
+use Cbox\Oidc\Config\HttpConfig;
 use Cbox\Oidc\Config\OidcConfig;
+use Cbox\Oidc\Contracts\HttpClient;
+use Cbox\Oidc\Contracts\OidcClient;
+use Cbox\Oidc\Diagnostics\ConnectionDiagnostics;
+use Cbox\Oidc\Discovery\MetadataRepository;
 use Cbox\Oidc\Exceptions\ErrorCode;
 use Cbox\Oidc\Exceptions\OidcException;
 use Cbox\Oidc\Exceptions\TokenRejected;
 use Cbox\Oidc\Flow\AuthorizationFlow;
+use Cbox\Oidc\Keys\KeySetRepository;
+use Cbox\Oidc\Keys\SigningKeys;
 use Cbox\Oidc\Logout\LogoutFlow;
 use Cbox\Oidc\Logout\LogoutTokenVerifier;
+use Cbox\Oidc\Tokens\ClaimChecks;
 use Cbox\Oidc\Tokens\IdTokenVerifier;
+use Cbox\Oidc\Tokens\SignedJwtReader;
+use Cbox\Oidc\Tokens\TokenEndpoint;
 use Cbox\Oidc\Tokens\TokenRefresher;
 use Cbox\Oidc\Tokens\TokenRevocation;
 use Cbox\Oidc\UserInfo\UserInfoEndpoint;
 use Closure;
+use Illuminate\Support\Facades\Facade;
 use PHPUnit\Framework\Assert;
 
 /**
@@ -57,9 +70,25 @@ final class Refusals
     public static function useConnection(string $name, array $values): void
     {
         config(['oidc.connections.'.$name => $values]);
+        self::forgetServices();
+    }
 
-        foreach ([OidcConfig::class, IdTokenVerifier::class, AuthorizationFlow::class, TokenRefresher::class, TokenRevocation::class, UserInfoEndpoint::class, LogoutFlow::class, LogoutTokenVerifier::class] as $service) {
+    /**
+     * Drops every service built from the configuration, so the next call
+     * reads config('oidc') again.
+     */
+    public static function forgetServices(): void
+    {
+        foreach ([
+            OidcConfig::class, HttpConfig::class, CacheConfig::class, FlowConfig::class, HttpClient::class,
+            MetadataRepository::class, KeySetRepository::class, SigningKeys::class, TokenEndpoint::class,
+            SignedJwtReader::class, ClaimChecks::class, IdTokenVerifier::class, AuthorizationFlow::class,
+            TokenRefresher::class, TokenRevocation::class, UserInfoEndpoint::class, LogoutFlow::class,
+            LogoutTokenVerifier::class, ConnectionDiagnostics::class, OidcClient::class,
+        ] as $service) {
             app()->forgetInstance($service);
         }
+
+        Facade::clearResolvedInstance(OidcClient::class);
     }
 }

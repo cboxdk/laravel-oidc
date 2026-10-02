@@ -239,3 +239,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   error alerting. A token with an unknown key while a refetch is held back by
   the cooldown still gets 503, logged as a warning, so a real rotation can be
   delivered again.
+
+### Added (after review)
+
+- **Local providers over plain http.** A connection may set
+  `allow_insecure_http` (`OIDC_ALLOW_INSECURE_HTTP`) to call a provider on the
+  developer's own machine, such as Keycloak in Docker on
+  `http://127.0.0.1:8080`. It is refused unless `APP_ENV` is `local` or
+  `testing`, and `oidc:check` warns while it is on. The Keycloak page has a
+  tested local `.env`. Before, the README pointed at `config/ssrf.php`, which
+  could not allow http at all.

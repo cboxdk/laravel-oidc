@@ -52,11 +52,21 @@ readonly class ConnectionConfig
         public ?string $postLogoutRedirectUri,
         public array $authorizationParameters,
         public ?ClientAssertionConfig $clientAssertion = null,
+        public bool $allowInsecureHttp = false,
     ) {}
 
-    public static function fromConfig(string $name, ConfigReader $config): self
+    /**
+     * @param  bool  $development  whether the application runs in a local or testing environment, the only ones where allow_insecure_http is accepted
+     */
+    public static function fromConfig(string $name, ConfigReader $config, bool $development = false): self
     {
-        $issuer = self::issuer($config);
+        $insecureHttp = $config->bool('allow_insecure_http', false);
+
+        if ($insecureHttp && ! $development) {
+            throw InvalidConfiguration::at($config->key('allow_insecure_http'), 'is only accepted when APP_ENV is local or testing', sprintf('Set %s to false and use the provider over https. Plain http is for a provider on your own machine during development only.', $config->key('allow_insecure_http')));
+        }
+
+        $issuer = self::issuer($config, $insecureHttp);
         $tenant = $config->has('tenant') ? TenantPolicy::fromConfig($config->child('tenant')) : null;
         $templated = str_contains($issuer, self::TENANT_TEMPLATE);
 
@@ -69,7 +79,7 @@ readonly class ConnectionConfig
         }
 
         $discoveryUrl = $config->has('discovery_url')
-            ? $config->httpsUrl('discovery_url')
+            ? $config->httpsUrl('discovery_url', insecureHttp: $insecureHttp)
             : rtrim($issuer, '/').'/.well-known/openid-configuration';
 
         $clientAuth = ClientAuthMethod::tryFrom($config->string('client_auth', ClientAuthMethod::ClientSecretBasic->value));
@@ -112,7 +122,19 @@ readonly class ConnectionConfig
             postLogoutRedirectUri: $config->has('post_logout_redirect_uri') ? $config->browserUrl('post_logout_redirect_uri') : null,
             authorizationParameters: self::authorizationParameters($config),
             clientAssertion: $clientAssertion,
+            allowInsecureHttp: $insecureHttp,
         );
+    }
+
+    /**
+     * The URL schemes the provider's endpoints may use: https, and http too
+     * when allow_insecure_http is on.
+     *
+     * @return list<string>
+     */
+    public function schemes(): array
+    {
+        return $this->allowInsecureHttp ? ['http', 'https'] : ['https'];
     }
 
     /**
@@ -148,10 +170,11 @@ readonly class ConnectionConfig
             'postLogoutRedirectUri' => $this->postLogoutRedirectUri,
             'authorizationParameters' => $this->authorizationParameters,
             'clientAssertion' => $this->clientAssertion,
+            'allowInsecureHttp' => $this->allowInsecureHttp,
         ];
     }
 
-    private static function issuer(ConfigReader $config): string
+    private static function issuer(ConfigReader $config, bool $insecureHttp): string
     {
         $issuer = $config->string('issuer');
 
@@ -159,7 +182,7 @@ readonly class ConnectionConfig
             throw InvalidConfiguration::at($config->key('issuer'), 'uses {tenantid} more than once', sprintf('Set %s to the issuer template exactly as the provider\'s metadata states it.', $config->key('issuer')));
         }
 
-        $config->httpsUrl('issuer', str_replace(self::TENANT_TEMPLATE, 'tenant', $issuer));
+        $config->httpsUrl('issuer', str_replace(self::TENANT_TEMPLATE, 'tenant', $issuer), $insecureHttp);
 
         if (str_contains($issuer, '?')) {
             throw InvalidConfiguration::at($config->key('issuer'), 'must not have a query', sprintf('Set %s to the issuer exactly as the provider\'s discovery document states it.', $config->key('issuer')));
