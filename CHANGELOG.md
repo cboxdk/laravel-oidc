@@ -240,7 +240,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the cooldown still gets 503, logged as a warning, so a real rotation can be
   delivered again.
 
-### Added (after review)
+### Added during review
 
 - **Local providers over plain http.** A connection may set
   `allow_insecure_http` (`OIDC_ALLOW_INSECURE_HTTP`) to call a provider on the
@@ -249,6 +249,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `testing`, and `oidc:check` warns while it is on. The Keycloak page has a
   tested local `.env`. Before, the README pointed at `config/ssrf.php`, which
   could not allow http at all.
+- **Typed claim readers.** `VerifiedClaims`, `UserInfo` and `LogoutToken`
+  read any claim with `string()`, `int()`, `bool()`, `stringList()` and
+  `time()`, each null for a missing claim or one of another JSON type, so
+  code on PHPStan's strictest level needs no narrowing; `claim()` stays as
+  the untyped escape hatch. `LogoutToken` now shares the readers instead of
+  its own copy of `claim()`.
+
+### Changed
+
 - **Setup that holds up on the first real login.** The README and quickstart
   callback stores only a verified email, catches the failures of normal use
   (a reloaded callback, a cancelled login, an organisation that may not sign
@@ -288,9 +297,3 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   covers. `ClientAssertion`, `ClientAuthentication`, `KeySelector`,
   `TokenEndpoint`, `OidcManager`, `Pkce` and `CheckConnectionCommand` are now
   `@internal`, and a docs check refuses a sample that uses an internal class.
-- **Typed claim readers.** `VerifiedClaims`, `UserInfo` and `LogoutToken`
-  read any claim with `string()`, `int()`, `bool()`, `stringList()` and
-  `time()`, each null for a missing claim or one of another JSON type, so
-  code on PHPStan's strictest level needs no narrowing; `claim()` stays as
-  the untyped escape hatch. `LogoutToken` now shares the readers instead of
-  its own copy of `claim()`.
