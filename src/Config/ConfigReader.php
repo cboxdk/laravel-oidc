@@ -71,12 +71,17 @@ readonly class ConfigReader
         return self::of($this->values[$key] ?? null, $this->key($key));
     }
 
-    public function string(string $key, ?string $default = null): string
+    /**
+     * @param  string|null  $env  the environment variable the published config/oidc.php reads this key from, named in the fix
+     */
+    public function string(string $key, ?string $default = null, ?string $env = null): string
     {
         $value = $this->values[$key] ?? $default;
 
         if (! is_string($value) || trim($value) === '') {
-            throw InvalidConfiguration::at($this->key($key), 'must be a non-empty string', sprintf('Set %s, usually from the environment.', $this->key($key)));
+            throw InvalidConfiguration::at($this->key($key), 'must be a non-empty string', $env === null
+                ? sprintf('Set %s, usually from the environment.', $this->key($key))
+                : sprintf('Set %s in .env (the published connection main reads it), or set %s in config/oidc.php.', $env, $this->key($key)));
         }
 
         return $value;
@@ -205,9 +210,9 @@ readonly class ConfigReader
      * on a local host ({@see Url::isLocalHost()}), for local development: on
      * any other host the code and state would cross the network unencrypted.
      */
-    public function browserUrl(string $key): string
+    public function browserUrl(string $key, ?string $env = null): string
     {
-        $value = $this->url($key, $this->string($key), ['http', 'https']);
+        $value = $this->url($key, $this->string($key, env: $env), ['http', 'https']);
         $parts = (array) parse_url($value);
 
         if (strtolower((string) ($parts['scheme'] ?? '')) === 'http' && ! Url::isLocalHost((string) ($parts['host'] ?? ''))) {

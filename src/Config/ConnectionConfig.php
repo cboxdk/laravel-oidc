@@ -58,15 +58,28 @@ readonly class ConnectionConfig
     /**
      * @param  bool  $development  whether the application runs in a local or testing environment, the only ones where allow_insecure_http is accepted
      */
+    /**
+     * The environment variables the published config/oidc.php reads the
+     * connection main from, named when one of them is missing.
+     */
+    public const array ENVIRONMENT = [
+        'issuer' => 'OIDC_ISSUER',
+        'client_id' => 'OIDC_CLIENT_ID',
+        'client_secret' => 'OIDC_CLIENT_SECRET',
+        'redirect_uri' => 'OIDC_REDIRECT_URI',
+    ];
+
     public static function fromConfig(string $name, ConfigReader $config, bool $development = false): self
     {
+        $env = static fn (string $key): ?string => $name === 'main' ? self::ENVIRONMENT[$key] ?? null : null;
+
         $insecureHttp = $config->bool('allow_insecure_http', false);
 
         if ($insecureHttp && ! $development) {
             throw InvalidConfiguration::at($config->key('allow_insecure_http'), 'is only accepted when APP_ENV is local or testing', sprintf('Set %s to false and use the provider over https. Plain http is for a provider on your own machine during development only.', $config->key('allow_insecure_http')));
         }
 
-        $issuer = self::issuer($config, $insecureHttp);
+        $issuer = self::issuer($config, $insecureHttp, $env('issuer'));
         $tenant = $config->has('tenant') ? TenantPolicy::fromConfig($config->child('tenant')) : null;
         $templated = str_contains($issuer, self::TENANT_TEMPLATE);
 
@@ -91,7 +104,9 @@ readonly class ConnectionConfig
         $secret = $config->nullableString('client_secret');
 
         if ($clientAuth->needsSecret() && $secret === null) {
-            throw InvalidConfiguration::at($config->key('client_secret'), sprintf('is required for client_auth %s', $clientAuth->value), sprintf('Set %s (usually OIDC_CLIENT_SECRET), or client_auth to none for a public client.', $config->key('client_secret')));
+            throw InvalidConfiguration::at($config->key('client_secret'), sprintf('is required for client_auth %s', $clientAuth->value), $name === 'main'
+                ? sprintf('Set OIDC_CLIENT_SECRET in .env (the published connection main reads it), or set %s; or client_auth to none for a public client.', $config->key('client_secret'))
+                : sprintf('Set %s, or client_auth to none for a public client.', $config->key('client_secret')));
         }
 
         $clientAssertion = null;
@@ -108,10 +123,10 @@ readonly class ConnectionConfig
             name: $name,
             issuer: $issuer,
             discoveryUrl: $discoveryUrl,
-            clientId: $config->string('client_id'),
+            clientId: $config->string('client_id', env: $env('client_id')),
             clientSecret: $clientAuth->needsSecret() ? $secret : null,
             clientAuth: $clientAuth,
-            redirectUri: $config->browserUrl('redirect_uri'),
+            redirectUri: $config->browserUrl('redirect_uri', $env('redirect_uri')),
             scopes: self::scopes($config),
             algorithms: self::algorithms($config),
             leewaySeconds: $config->int('leeway_seconds', 60, 0, 300),
@@ -174,9 +189,9 @@ readonly class ConnectionConfig
         ];
     }
 
-    private static function issuer(ConfigReader $config, bool $insecureHttp): string
+    private static function issuer(ConfigReader $config, bool $insecureHttp, ?string $env): string
     {
-        $issuer = $config->string('issuer');
+        $issuer = $config->string('issuer', env: $env);
 
         if (substr_count($issuer, self::TENANT_TEMPLATE) > 1) {
             throw InvalidConfiguration::at($config->key('issuer'), 'uses {tenantid} more than once', sprintf('Set %s to the issuer template exactly as the provider\'s metadata states it.', $config->key('issuer')));

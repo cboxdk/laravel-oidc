@@ -262,3 +262,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Google" and asks for consent per login rather than at every sign-in, and
   the README shows the Google `.env`. Publishing the configuration is
   optional.
+- **Missing values name their variable.** A missing `issuer`, `client_id`,
+  `client_secret` or `redirect_uri` of the connection `main` now says which
+  `.env` variable to set (`OIDC_ISSUER` and so on).

@@ -143,8 +143,32 @@ it('carries the error code and the fix on the exception', function (): void {
 
     expect($exception->errorCode())->toBe(ErrorCode::ConfigInvalid)
         ->and($exception->key())->toBe('oidc.connections.main.issuer')
-        ->and($exception->fix())->toBe('Set oidc.connections.main.issuer, usually from the environment.')
-        ->and($exception->getMessage())->toBe('[oidc_config_invalid] oidc.connections.main.issuer must be a non-empty string. Fix: Set oidc.connections.main.issuer, usually from the environment.');
+        ->and($exception->fix())->toBe('Set OIDC_ISSUER in .env (the published connection main reads it), or set oidc.connections.main.issuer in config/oidc.php.')
+        ->and($exception->getMessage())->toBe('[oidc_config_invalid] oidc.connections.main.issuer must be a non-empty string. Fix: Set OIDC_ISSUER in .env (the published connection main reads it), or set oidc.connections.main.issuer in config/oidc.php.');
+});
+
+it('names the environment variable of a missing value of the connection main', function (string $key, string $env): void {
+    $exception = refusal(ConnectionFixtures::minimal([$key => null]));
+
+    expect($exception->key())->toBe('oidc.connections.main.'.$key)
+        ->and($exception->fix())->toStartWith(sprintf('Set %s in .env', $env));
+})->with([
+    'issuer' => ['issuer', 'OIDC_ISSUER'],
+    'client_id' => ['client_id', 'OIDC_CLIENT_ID'],
+    'client_secret' => ['client_secret', 'OIDC_CLIENT_SECRET'],
+    'redirect_uri' => ['redirect_uri', 'OIDC_REDIRECT_URI'],
+]);
+
+it('names no environment variable for another connection, which the published file does not read', function (): void {
+    try {
+        OidcConfig::fromArray(['connections' => ['google' => ConnectionFixtures::minimal(['client_id' => null])]]);
+    } catch (InvalidConfiguration $exception) {
+        expect($exception->fix())->toBe('Set oidc.connections.google.client_id, usually from the environment.');
+
+        return;
+    }
+
+    test()->fail('The configuration was accepted.');
 });
 
 it('refuses an invalid connection value', function (array $overrides, string $key, string $problem): void {
