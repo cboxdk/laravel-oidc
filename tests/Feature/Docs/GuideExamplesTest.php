@@ -9,6 +9,7 @@ use Cbox\Oidc\Contracts\HttpClient;
 use Cbox\Oidc\Contracts\OidcClient;
 use Cbox\Oidc\Contracts\TransactionStore;
 use Cbox\Oidc\Discovery\MetadataRepository;
+use Cbox\Oidc\Exceptions\TenantRejected;
 use Cbox\Oidc\Facades\Oidc;
 use Cbox\Oidc\Flow\AuthorizationTransaction;
 use Cbox\Oidc\Keys\KeySetRepository;
@@ -79,7 +80,7 @@ describe('the quickstart', function (): void {
         $provider = new FakeProvider()->install();
 
         $login = $this->get('/login');
-        $query = $provider->approve((string) $login->headers->get('Location'), ['sub' => 'ada', 'email' => 'ada@example.com', 'name' => 'Ada']);
+        $query = $provider->approve((string) $login->headers->get('Location'), ['sub' => 'ada', 'email' => 'ada@example.com', 'email_verified' => true, 'name' => 'Ada']);
 
         $this->withCookie((string) config('session.cookie'), (string) $login->getCookie((string) config('session.cookie'))?->getValue())
             ->get('https://app.example.test/oidc/callback?'.http_build_query($query))
@@ -91,7 +92,7 @@ describe('the quickstart', function (): void {
     });
 
     it('updates the same user at the next sign-in', function (): void {
-        Oidc::fake()->signIn('ada', ['email' => 'ada@example.com'])->signIn('ada', ['email' => 'ada@example.org']);
+        Oidc::fake()->signIn('ada', ['email' => 'ada@example.com', 'email_verified' => true])->signIn('ada', ['email' => 'ada@example.org', 'email_verified' => true]);
 
         $this->get('/oidc/callback')->assertRedirect('/');
         $this->get('/oidc/callback')->assertRedirect('/');
@@ -101,6 +102,46 @@ describe('the quickstart', function (): void {
 
     it('runs the documented test', function (): void {
         runDocTests('setup-test');
+    });
+
+    it('keeps an unverified email out, and signs in a person without one', function (): void {
+        Oidc::fake()->signIn('ada', ['email' => 'boss@example.com', 'email_verified' => false])->signIn('grace');
+
+        $this->get('/oidc/callback')->assertRedirect('/');
+        $this->get('/oidc/callback')->assertRedirect('/');
+
+        expect(User::query()->orderBy('id')->pluck('email', 'oidc_subject')->all())->toBe(['ada' => null, 'grace' => null]);
+    });
+
+    it('answers the failures of normal use with a message, not an error page', function (): void {
+        $provider = new FakeProvider()->install();
+        $cookie = (string) config('session.cookie');
+
+        // Reloading the callback: its login is used up.
+        $login = $this->get('/login');
+        $query = http_build_query($provider->approve((string) $login->headers->get('Location'), ['sub' => 'ada']));
+        $session = (string) $login->getCookie($cookie)?->getValue();
+        $this->withCookie($cookie, $session)->get('https://app.example.test/oidc/callback?'.$query)->assertRedirect('/');
+        $this->withCookie($cookie, $session)->get('https://app.example.test/oidc/callback?'.$query)
+            ->assertRedirect('/')->assertSessionHas('status', 'Your sign-in expired. Please sign in again.');
+
+        // Cancelled at the provider.
+        $login = $this->get('/login');
+        $this->withCookie($cookie, (string) $login->getCookie($cookie)?->getValue())
+            ->get('https://app.example.test/oidc/callback?'.http_build_query($provider->deny((string) $login->headers->get('Location'))))
+            ->assertRedirect('/')->assertSessionHas('status', 'You were not signed in.');
+
+        // Anything else is reported.
+        $login = $this->get('/login');
+        $this->withCookie($cookie, (string) $login->getCookie($cookie)?->getValue())
+            ->get('https://app.example.test/oidc/callback?'.http_build_query($provider->approve((string) $login->headers->get('Location'), ['nonce' => 'another-login'])))
+            ->assertRedirect('/')->assertSessionHas('status', 'Sign-in failed. Please try again.');
+    });
+
+    it('refuses a person of an organisation that may not sign in with a message', function (): void {
+        Oidc::fake()->failSignIn(TenantRejected::notAllowed('main', 'hd', 'other.example'));
+
+        $this->get('/oidc/callback')->assertRedirect('/')->assertSessionHas('status', 'You were not signed in.');
     });
 
     it('rolls the migration back', function (): void {

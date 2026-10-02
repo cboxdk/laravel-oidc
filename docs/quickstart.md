@@ -10,8 +10,11 @@ weight: 2
 
 ```bash
 composer require cboxdk/laravel-oidc
-php artisan vendor:publish --tag=oidc-config
 ```
+
+The defaults are merged in, so publishing `config/oidc.php` is optional. Do
+it when you add a second connection or pin tenants:
+`php artisan vendor:publish --tag=oidc-config`.
 
 ## 2. Register your application at the provider
 
@@ -26,9 +29,9 @@ OIDC_CLIENT_SECRET=your-client-secret
 OIDC_REDIRECT_URI=https://app.example.com/oidc/callback
 ```
 
-The published `config/oidc.php` reads these into the connection `main`. The
-[provider pages](providers/_index.md) have a tested configuration for Google,
-Microsoft Entra ID, Okta, Keycloak, Auth0 and Cbox ID.
+The connection `main` of `config/oidc.php` reads these. The
+[provider pages](providers/_index.md) have the values for Google, Microsoft
+Entra ID, Okta, Keycloak, Auth0 and Cbox ID.
 
 ## 3. Check the connection
 
@@ -43,7 +46,8 @@ and the fix for what does not. See
 ## 4. Remember who signed in
 
 A person is identified by the provider's issuer and their subject there,
-never by email. Add both to the users table, and let the password be empty:
+never by email. Add both to the users table, and let the password and the
+email be empty, because not every provider sends a verified email:
 
 <!-- example: setup-migration -->
 ```php
@@ -61,6 +65,7 @@ return new class extends Migration
             $table->string('oidc_issuer')->nullable();
             $table->string('oidc_subject')->nullable();
             $table->string('password')->nullable()->change();
+            $table->string('email')->nullable()->change();
             $table->unique(['oidc_issuer', 'oidc_subject']);
         });
     }
@@ -100,6 +105,10 @@ In `routes/web.php`:
 <?php
 
 use App\Models\User;
+use Cbox\Oidc\Exceptions\AuthorizationDenied;
+use Cbox\Oidc\Exceptions\CallbackRejected;
+use Cbox\Oidc\Exceptions\OidcException;
+use Cbox\Oidc\Exceptions\TenantRejected;
 use Cbox\Oidc\Facades\Oidc;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -107,11 +116,24 @@ use Illuminate\Support\Facades\Route;
 Route::get('/login', fn () => Oidc::redirect())->name('login');
 
 Route::get('/oidc/callback', function () {
-    $claims = Oidc::callback()->claims;
+    try {
+        $claims = Oidc::callback()->claims;
+    } catch (CallbackRejected) {
+        // Reloaded, used twice or too old.
+        return redirect('/')->with('status', 'Your sign-in expired. Please sign in again.');
+    } catch (AuthorizationDenied|TenantRejected) {
+        // Cancelled at the provider, or an organisation that may not sign in.
+        return redirect('/')->with('status', 'You were not signed in.');
+    } catch (OidcException $exception) {
+        report($exception);
+
+        return redirect('/')->with('status', 'Sign-in failed. Please try again.');
+    }
 
     Auth::login(User::updateOrCreate(
         ['oidc_issuer' => $claims->issuer, 'oidc_subject' => $claims->subject],
-        ['name' => $claims->name() ?? $claims->subject, 'email' => $claims->email()],
+        // An unverified address is not the person's: keep it out.
+        ['name' => $claims->name() ?? $claims->subject, 'email' => $claims->emailVerified() ? $claims->email() : null],
     ));
     session()->regenerate();
 
@@ -123,10 +145,19 @@ Route::get('/oidc/callback', function () {
 and PKCE challenge. `Oidc::callback()` checks the browser's return, exchanges
 the code and verifies the ID token; `$claims` are the verified claims.
 
-A failed login throws an `OidcException` with a code and a fix. Unhandled, it
-is a 500 page; [the login flow](core-concepts/login-flow.md#routes) shows the
-routes with error handling, which you want before going live. Your users table
-must accept a null email if the provider may not send one.
+A failed login throws an `OidcException` with a code and a fix. The route
+handles the ones that happen in normal use: `CallbackRejected` when the person
+reloads the callback, goes back to it or took longer than ten minutes,
+`AuthorizationDenied` when they cancel at the provider, and `TenantRejected`
+when their organisation may not sign in. Anything else is reported. See
+[errors](core-concepts/errors.md) for every code.
+
+Only a verified email is stored. `users.email` stays unique, so a person who
+signs in through a second provider, or who has a password account with the
+same address, makes `updateOrCreate` fail on the unique index. Decide what
+that means for you: link the accounts on purpose (look the user up by the
+verified email and store the issuer and subject on them), or drop the unique
+index on `email`.
 
 ## 6. Test it
 

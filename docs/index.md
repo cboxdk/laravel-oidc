@@ -24,6 +24,9 @@ Route::get('/login', fn () => Oidc::redirect());
 Route::get('/oidc/callback', fn () => Oidc::callback()->claims->subject);
 ```
 
+That is the shape of it; the [quickstart](quickstart.md) has the routes to
+ship, with the users table and the failures of normal use handled.
+
 ## The mental model
 
 - A **connection** is one client registered at one provider, pinned to one

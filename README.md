@@ -11,6 +11,10 @@ every call to the provider behind an SSRF guard.
 <?php
 
 use App\Models\User;
+use Cbox\Oidc\Exceptions\AuthorizationDenied;
+use Cbox\Oidc\Exceptions\CallbackRejected;
+use Cbox\Oidc\Exceptions\OidcException;
+use Cbox\Oidc\Exceptions\TenantRejected;
 use Cbox\Oidc\Facades\Oidc;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -18,11 +22,24 @@ use Illuminate\Support\Facades\Route;
 Route::get('/login', fn () => Oidc::redirect())->name('login');
 
 Route::get('/oidc/callback', function () {
-    $claims = Oidc::callback()->claims;
+    try {
+        $claims = Oidc::callback()->claims;
+    } catch (CallbackRejected) {
+        // Reloaded, used twice or too old.
+        return redirect('/')->with('status', 'Your sign-in expired. Please sign in again.');
+    } catch (AuthorizationDenied|TenantRejected) {
+        // Cancelled at the provider, or an organisation that may not sign in.
+        return redirect('/')->with('status', 'You were not signed in.');
+    } catch (OidcException $exception) {
+        report($exception);
+
+        return redirect('/')->with('status', 'Sign-in failed. Please try again.');
+    }
 
     Auth::login(User::updateOrCreate(
         ['oidc_issuer' => $claims->issuer, 'oidc_subject' => $claims->subject],
-        ['name' => $claims->name() ?? $claims->subject, 'email' => $claims->email()],
+        // An unverified address is not the person's: keep it out.
+        ['name' => $claims->name() ?? $claims->subject, 'email' => $claims->emailVerified() ? $claims->email() : null],
     ));
     session()->regenerate();
 
@@ -31,7 +48,9 @@ Route::get('/oidc/callback', function () {
 ```
 
 `$claims` are verified: signature, issuer, audience, nonce, times and tenant.
-Identify the person by `$claims->issuer` and `$claims->subject` together.
+Identify the person by `$claims->issuer` and `$claims->subject` together,
+never by email. A failed login throws an `OidcException` with a code and a
+fix; the route turns the common ones into a message instead of an error page.
 
 > **Status: in development, not released.** Version 0.1 is complete in scope
 > and being reviewed before its first release. The [changelog](CHANGELOG.md)
@@ -74,25 +93,30 @@ outbound call guarded by
 
 ```bash
 composer require cboxdk/laravel-oidc
-php artisan vendor:publish --tag=oidc-config
 ```
 
-Then set the connection in your environment and check it:
+The defaults are merged in, so publishing `config/oidc.php` is optional; do
+it (`php artisan vendor:publish --tag=oidc-config`) when you add a second
+connection or pin tenants. Set the connection in `.env`. Sign in with Google,
+for example, with an OAuth client whose redirect URI is the route above:
 
+<!-- example: provider-google -->
 ```dotenv
-OIDC_ISSUER=https://login.example.com
-OIDC_CLIENT_ID=your-client-id
-OIDC_CLIENT_SECRET=your-client-secret
+OIDC_ISSUER=https://accounts.google.com
+OIDC_CLIENT_ID=1234567890-abc123.apps.googleusercontent.com
+OIDC_CLIENT_SECRET=GOCSPX-your-client-secret
 OIDC_REDIRECT_URI=https://app.example.com/oidc/callback
 ```
+
+Then check the connection:
 
 ```bash
 php artisan oidc:check
 ```
 
 The [quickstart](docs/quickstart.md) walks through the users table and the
-routes above; the [provider pages](docs/providers/_index.md) have a tested
-configuration for each common provider.
+routes above; the [provider pages](docs/providers/_index.md) have tested
+settings for Microsoft Entra ID, Okta, Keycloak, Auth0 and Cbox ID as well.
 
 ## Testing your application
 

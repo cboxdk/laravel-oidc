@@ -6,29 +6,31 @@ weight: 45
 
 # Auth0
 
-Create an application of type "Regular Web Application". Add the callback URL
-under Allowed Callback URLs and the logout URL under Allowed Logout URLs.
+Create an application of type "Regular Web Application". Add
+`https://app.example.com/oidc/callback` under Allowed Callback URLs and your
+logout URL under Allowed Logout URLs.
 
 <!-- example: provider-auth0 -->
+```dotenv
+# Auth0's issuer ends in a slash; write it exactly so.
+OIDC_ISSUER=https://example-tenant.eu.auth0.com/
+OIDC_CLIENT_ID=your-client-id
+OIDC_CLIENT_SECRET=your-client-secret
+OIDC_REDIRECT_URI=https://app.example.com/oidc/callback
+OIDC_POST_LOGOUT_REDIRECT_URI=https://app.example.com/
+```
+
+For refresh tokens and roles, set in `connections.main` of `config/oidc.php`:
+
+<!-- example: provider-auth0-config -->
 ```php
 <?php
 
+// config/oidc.php, in connections.main
 return [
-    'default' => 'auth0',
-    'connections' => [
-        'auth0' => [
-            // Auth0's issuer ends in a slash; write it exactly so.
-            'issuer' => 'https://example-tenant.eu.auth0.com/',
-            'client_id' => env('AUTH0_CLIENT_ID', 'auth0-client-id'),
-            'client_secret' => env('AUTH0_CLIENT_SECRET', 'auth0-client-secret'),
-            'redirect_uri' => 'https://app.example.com/oidc/auth0/callback',
-            'scopes' => ['openid', 'profile', 'email', 'offline_access'],
-            'algorithms' => ['RS256'],
-            // A namespaced claim that an Auth0 Action adds.
-            'groups' => ['source' => 'id_token', 'claim' => 'https://app.example.com/roles'],
-            'post_logout_redirect_uri' => 'https://app.example.com/',
-        ],
-    ],
+    'scopes' => ['openid', 'profile', 'email', 'offline_access'],
+    // A namespaced claim that an Auth0 Action adds.
+    'groups' => ['source' => 'id_token', 'claim' => 'https://app.example.com/roles'],
 ];
 ```
 

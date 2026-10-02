@@ -7,30 +7,31 @@ weight: 43
 # Okta
 
 Create an app integration of type "OIDC - OpenID Connect", "Web Application".
-Add the callback URL as a sign-in redirect URI and the logout URL as a
-sign-out redirect URI. Tick "Refresh Token" under grant types for refresh
-tokens.
+Add `https://app.example.com/oidc/callback` as a sign-in redirect URI and your
+logout URL as a sign-out redirect URI. Tick "Refresh Token" under grant types
+for refresh tokens.
 
 <!-- example: provider-okta -->
+```dotenv
+# The default custom authorization server. For the org authorization
+# server, the issuer is https://example.okta.com.
+OIDC_ISSUER=https://example.okta.com/oauth2/default
+OIDC_CLIENT_ID=0oa1example2client3id
+OIDC_CLIENT_SECRET=your-client-secret
+OIDC_REDIRECT_URI=https://app.example.com/oidc/callback
+OIDC_POST_LOGOUT_REDIRECT_URI=https://app.example.com/
+```
+
+For refresh tokens, add `offline_access` in `connections.main` of
+`config/oidc.php`:
+
+<!-- example: provider-okta-config -->
 ```php
 <?php
 
+// config/oidc.php, in connections.main
 return [
-    'default' => 'okta',
-    'connections' => [
-        'okta' => [
-            // The default custom authorization server. For the org
-            // authorization server, the issuer is https://example.okta.com.
-            'issuer' => 'https://example.okta.com/oauth2/default',
-            'client_id' => env('OKTA_CLIENT_ID', '0oa1example2client3id'),
-            'client_secret' => env('OKTA_CLIENT_SECRET', 'okta-client-secret'),
-            'redirect_uri' => 'https://app.example.com/oidc/okta/callback',
-            'scopes' => ['openid', 'profile', 'email', 'offline_access'],
-            'algorithms' => ['RS256'],
-            'groups' => ['source' => 'id_token', 'claim' => 'groups'],
-            'post_logout_redirect_uri' => 'https://app.example.com/',
-        ],
-    ],
+    'scopes' => ['openid', 'profile', 'email', 'offline_access'],
 ];
 ```
 
@@ -44,7 +45,8 @@ return [
   server, add a claim named `groups` of value type Groups, included in the ID
   token always, with a filter such as "Matches regex .*". On the org
   authorization server, set the app's groups claim filter and add `groups` to
-  `scopes`. The claim must be a list of strings.
+  `scopes`. The claim must be a list of strings; the published configuration
+  reads it from the ID token.
 - **Signing.** RS256.
 - **Refresh.** Request `offline_access` and enable the Refresh Token grant.
   Okta can rotate refresh tokens; always keep `$renewed->refreshToken`.

@@ -6,27 +6,28 @@ weight: 46
 
 # Cbox ID
 
-Register an OAuth client on your Cbox ID instance with the callback URL as a
-redirect URI.
+Register an OAuth client on your Cbox ID instance with
+`https://app.example.com/oidc/callback` as a redirect URI.
 
 <!-- example: provider-cbox-id -->
+```dotenv
+OIDC_ISSUER=https://id.example.com
+OIDC_CLIENT_ID=cid_example
+OIDC_CLIENT_SECRET=csec_example
+OIDC_REDIRECT_URI=https://app.example.com/oidc/callback
+OIDC_POST_LOGOUT_REDIRECT_URI=https://app.example.com/
+```
+
+For refresh tokens, add `offline_access` in `connections.main` of
+`config/oidc.php`:
+
+<!-- example: provider-cbox-id-config -->
 ```php
 <?php
 
+// config/oidc.php, in connections.main
 return [
-    'default' => 'cbox',
-    'connections' => [
-        'cbox' => [
-            'issuer' => env('CBOX_ID_ISSUER', 'https://id.example.com'),
-            'client_id' => env('CBOX_ID_CLIENT_ID', 'cid_example'),
-            'client_secret' => env('CBOX_ID_CLIENT_SECRET', 'csec_example'),
-            'redirect_uri' => 'https://app.example.com/oidc/cbox/callback',
-            'scopes' => ['openid', 'profile', 'email', 'offline_access'],
-            'algorithms' => ['RS256'],
-            'groups' => ['source' => 'none'],
-            'post_logout_redirect_uri' => 'https://app.example.com/',
-        ],
-    ],
+    'scopes' => ['openid', 'profile', 'email', 'offline_access'],
 ];
 ```
 

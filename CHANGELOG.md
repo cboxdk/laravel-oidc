@@ -249,3 +249,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `testing`, and `oidc:check` warns while it is on. The Keycloak page has a
   tested local `.env`. Before, the README pointed at `config/ssrf.php`, which
   could not allow http at all.
+- **Setup that holds up on the first real login.** The README and quickstart
+  callback stores only a verified email, catches the failures of normal use
+  (a reloaded callback, a cancelled login, an organisation that may not sign
+  in) instead of showing an error page, and the quickstart migration makes
+  `users.email` nullable and says what to do about the unique index.
+- **Provider pages fill in the published connection.** Every provider page
+  is now a `.env` for the connection `main` (the same `OIDC_*` variables and
+  callback as the quickstart), plus the keys to add to `connections.main`
+  where the defaults are not enough, without fallback values that would hide
+  a missing variable. The Google page starts from a plain "Sign in with
+  Google" and asks for consent per login rather than at every sign-in, and
+  the README shows the Google `.env`. Publishing the configuration is
+  optional.
