@@ -232,3 +232,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   must be https, except on `localhost`, a loopback address or a name below
   `.localhost` or `.test`. Before, http was accepted on any host and only
   `oidc:check` warned, so a code could cross the network unencrypted.
+- **Back-channel logout answers forged key ids with 400.** A logout token
+  that names a key the provider's key set lacks (after a refetch) or that may
+  not verify it now gets 400 and a warning, not 503 and an error-level log
+  entry, so unauthenticated POSTs no longer ask a provider to retry or wake
+  error alerting. A token with an unknown key while a refetch is held back by
+  the cooldown still gets 503, logged as a warning, so a real rotation can be
+  delivered again.

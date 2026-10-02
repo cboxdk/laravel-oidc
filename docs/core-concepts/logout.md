@@ -173,9 +173,9 @@ answers:
 | Status | When |
 |---|---|
 | 200 | The token verified and every listener returned. |
-| 400 | No `logout_token`, or the token was refused; the body is an OAuth error whose description names the code, and the refusal is logged as a warning. |
+| 400 | No `logout_token`, or the token was refused, also for a key the key set lacks (after a refetch) or that may not verify it; the body is an OAuth error whose description names the code, and the refusal is logged as a warning. |
 | 404 | The connection is not configured. |
-| 503 | The provider's keys or discovery document cannot be loaded now; logged as an error, so the provider can retry. |
+| 503 | The provider's keys or discovery document cannot be loaded now (logged as an error), or the token names an unknown key while a refetch is held back by `jwks_refetch_cooldown_seconds` (logged as a warning); the provider can retry. |
 | 500 | A listener threw. The token's `jti` is given back, so a retry is not taken for a replay. |
 
 `BackChannelLogoutReceived::$token` is a `LogoutToken`: `connection`,

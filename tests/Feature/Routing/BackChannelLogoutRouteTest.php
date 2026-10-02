@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Cbox\Oidc\Events\BackChannelLogoutReceived;
 use Cbox\Oidc\Routing\BackChannelLogoutController;
 use Cbox\Oidc\Tests\Support\FakeProvider;
+use Cbox\Oidc\Tokens\SigningAlgorithm;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Routing\Route as RoutingRoute;
 use Illuminate\Support\Facades\Event;
@@ -104,6 +105,46 @@ it('answers 503 when the provider\'s keys cannot be loaded, so the provider retr
         ->assertJsonPath('error', 'temporarily_unavailable');
 
     Log::shouldHaveReceived('error')->once();
+});
+
+it('answers 400 with a warning to a token whose kid the key set lacks, also after a refetch', function (): void {
+    Log::spy();
+    $forger = FakeProvider::rsaKey('forger', values: ['kid' => 'unknown-kid']);
+
+    ($this->post)(['logout_token' => $this->provider->logoutToken(key: $forger)])
+        ->assertStatus(400)
+        ->assertExactJson(['error' => 'invalid_request', 'error_description' => 'The logout token was refused (oidc_signing_key_not_found).']);
+
+    Log::shouldHaveReceived('warning')->once()->withArgs(fn (string $message, array $context): bool => str_contains($message, 'also after refetching the key set')
+        && $context === ['code' => 'oidc_signing_key_not_found', 'connection' => 'main']);
+    Log::shouldNotHaveReceived('error');
+});
+
+it('answers 503 with a warning to an unknown kid while a refetch is held back, so a rotation can be retried', function (): void {
+    Log::spy();
+    $forger = FakeProvider::rsaKey('forger', values: ['kid' => 'unknown-kid']);
+
+    ($this->post)(['logout_token' => $this->provider->logoutToken(key: $forger)])->assertStatus(400);
+    ($this->post)(['logout_token' => $this->provider->logoutToken(key: $forger)])
+        ->assertStatus(503)
+        ->assertExactJson(['error' => 'temporarily_unavailable', 'error_description' => 'The logout token could not be verified now (oidc_signing_key_not_found).']);
+
+    expect($this->provider->jwksRequests)->toBe(2);
+    Log::shouldHaveReceived('warning')->twice();
+    Log::shouldNotHaveReceived('error');
+});
+
+it('answers 400 with a warning to a token whose key may not verify it', function (): void {
+    Log::spy();
+    // ES256, naming the provider's RSA key.
+    $token = $this->provider->logoutToken(algorithm: SigningAlgorithm::ES256, header: ['kid' => 'rsa-1'], key: FakeProvider::ecKey('forger'));
+
+    ($this->post)(['logout_token' => $token])
+        ->assertStatus(400)
+        ->assertJsonPath('error_description', 'The logout token was refused (oidc_signing_key_unsuitable).');
+
+    Log::shouldHaveReceived('warning')->once();
+    Log::shouldNotHaveReceived('error');
 });
 
 it('accepts only POST', function (): void {

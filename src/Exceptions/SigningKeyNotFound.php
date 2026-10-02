@@ -15,6 +15,8 @@ class SigningKeyNotFound extends OidcException
 {
     private bool $refetchable = false;
 
+    private bool $retryLater = false;
+
     public static function unknownKid(string $connection, string $kid): self
     {
         $exception = new self(
@@ -49,17 +51,29 @@ class SigningKeyNotFound extends OidcException
     }
 
     /**
-     * The same failure after the key set was refetched, or while a refetch is
-     * held back by the cooldown.
+     * The same failure after the key set was refetched, or, with $retryLater,
+     * while a refetch is held back by the cooldown.
      */
-    public function after(string $what): self
+    public function after(string $what, bool $retryLater = false): self
     {
-        return new self(
+        $exception = new self(
             $this->errorCode(),
             sprintf('%s (%s).', rtrim($this->problem(), '.'), $what),
             $this->fix(),
             $this,
         );
+        $exception->retryLater = $retryLater;
+
+        return $exception;
+    }
+
+    /**
+     * Whether the key set could not be refetched because of the cooldown, so
+     * the same token may verify once the cooldown has passed.
+     */
+    public function retryLater(): bool
+    {
+        return $this->retryLater;
     }
 
     /** Whether refetching the key set could help (the provider may have rotated). */

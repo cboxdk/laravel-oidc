@@ -61,7 +61,7 @@ final readonly class SigningKeys
         $fresh = $this->keySets->refresh($connection, $metadata);
 
         if (! $fresh instanceof KeySet) {
-            throw $missing->after('the key set was refetched within the cooldown, so it was not fetched again');
+            throw $missing->after('the key set was refetched within the cooldown, so it was not fetched again', retryLater: true);
         }
 
         try {

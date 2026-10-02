@@ -6,6 +6,8 @@ namespace Cbox\Oidc\Routing;
 
 use Cbox\Oidc\Events\BackChannelLogoutReceived;
 use Cbox\Oidc\Exceptions\OidcException;
+use Cbox\Oidc\Exceptions\SigningKeyNotFound;
+use Cbox\Oidc\Exceptions\SigningKeyUnsuitable;
 use Cbox\Oidc\Exceptions\TokenRejected;
 use Cbox\Oidc\Exceptions\UnknownConnection;
 use Cbox\Oidc\Logout\LogoutTokenReplayGuard;
@@ -30,11 +32,17 @@ use Throwable;
  * It answers:
  *
  * - 200 when the token verified and every listener returned;
- * - 400 with an OAuth error body when the token is missing or refused (the
- *   refusal is logged as a warning with its code);
+ * - 400 with an OAuth error body when the token is missing or refused, also
+ *   when it names a key the provider's key set does not have or that may not
+ *   verify it (the refusal is logged as a warning with its code);
  * - 404 for a connection that is not configured;
  * - 503 when the provider's keys or discovery document cannot be loaded, so
- *   the provider may retry (logged as an error).
+ *   the provider may retry (logged as an error), and, logged as a warning,
+ *   when the token names an unknown key while a refetch of the key set is
+ *   held back by the cooldown (a rotation the next delivery may see).
+ *
+ * The endpoint takes requests from anyone, so a token that names an unknown
+ * or unfit key is never logged as an error.
  *
  * Every answer carries Cache-Control: no-store. A listener that throws gives
  * the token's jti back, so a retry of the delivery is not taken for a replay.
@@ -69,6 +77,12 @@ final readonly class BackChannelLogoutController
             $this->log->warning('OIDC back-channel logout token refused: '.$exception->getMessage(), ['code' => $exception->errorCode()->value, 'connection' => $connection]);
 
             return $this->error(400, 'invalid_request', sprintf('The logout token was refused (%s).', $exception->errorCode()->value));
+        } catch (SigningKeyNotFound|SigningKeyUnsuitable $exception) {
+            $this->log->warning('OIDC back-channel logout token names no usable key: '.$exception->getMessage(), ['code' => $exception->errorCode()->value, 'connection' => $connection]);
+
+            return $exception instanceof SigningKeyNotFound && $exception->retryLater()
+                ? $this->error(503, 'temporarily_unavailable', sprintf('The logout token could not be verified now (%s).', $exception->errorCode()->value))
+                : $this->error(400, 'invalid_request', sprintf('The logout token was refused (%s).', $exception->errorCode()->value));
         } catch (OidcException $exception) {
             $this->log->error('OIDC back-channel logout could not verify the token: '.$exception->getMessage(), ['code' => $exception->errorCode()->value, 'connection' => $connection]);
 
