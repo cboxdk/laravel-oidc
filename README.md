@@ -7,9 +7,11 @@ verification, and hands your application a typed, verified result.
 
 > **Status: in development, not released.** Version 0.1 is being built in
 > slices. Today the package has its typed, multi-connection configuration,
-> discovery and signing-key handling behind the SSRF guard. The login flow,
-> token verification and the rest of the scope below land in the next slices;
-> the [changelog](CHANGELOG.md) lists what exists.
+> discovery and signing-key handling behind the SSRF guard, and the
+> authorization code flow up to the code exchange. ID token verification and
+> the rest of the scope below land in the next slices; until then, do not sign
+> anyone in from the tokens the callback returns. The
+> [changelog](CHANGELOG.md) lists what exists.
 
 ## Why
 
@@ -28,7 +30,10 @@ with the cryptography left to an established library.
 - The provider's signing keys (JWKS): cached with the provider's lifetime,
   refetched once on an unknown `kid` with a cross-process cooldown, and each
   key checked for type, curve, size, use and alg before it may verify. Done.
-- Authorization code flow with PKCE (S256), with state and nonce in the session.
+- Authorization code flow with PKCE (S256), with state and nonce in the
+  session, the RFC 9207 `iss` check, and the code exchange with
+  `client_secret_basic`, `client_secret_post`, `private_key_jwt` or a public
+  client. Done.
 - ID token verification: signature through the provider's JWKS (refetched once,
   rate-limited, on an unknown `kid`), a per-connection algorithm allow-list,
   `iss`, `aud`, `azp`, `exp`, `nbf`, `iat` with leeway, `nonce`, `at_hash`,
@@ -75,6 +80,30 @@ full key and the fix:
 
 See the [configuration reference](docs/configuration/reference.md) for every key.
 
+## Usage
+
+Give each connection a login route and its own callback route:
+
+```php
+use Cbox\Oidc\Flow\AuthorizationFlow;
+use Illuminate\Http\Request;
+
+Route::middleware('web')->group(function () {
+    Route::get('/oidc/{connection}/login', fn (AuthorizationFlow $oidc, string $connection) => $oidc->start($connection));
+
+    Route::get('/oidc/{connection}/callback', function (Request $request, AuthorizationFlow $oidc, string $connection) {
+        $result = $oidc->callback($request, $connection);
+        // ID token verification comes in the next slice of 0.1.
+    });
+});
+```
+
+`start()` sends the browser to the provider with a fresh state, nonce and PKCE
+challenge. `callback()` checks the state, the `iss` parameter and any error,
+then exchanges the code. See [the login flow](docs/core-concepts/login-flow.md)
+for options such as `prompt`, `max_age` and `login_hint`, and for the full
+example with error handling.
+
 ## Errors
 
 Every exception extends `OidcException` and carries a stable code and a fix.
@@ -84,8 +113,8 @@ See [errors](docs/core-concepts/errors.md) for the list.
 
 - The package is a relying party only. It is not an OpenID provider and issues
   no tokens to others.
-- Encrypted ID tokens (JWE), signed userinfo responses and `private_key_jwt`
-  client authentication are not part of 0.1.
+- Encrypted ID tokens (JWE), signed userinfo responses, pushed authorization
+  requests (PAR), DPoP and the form_post response mode are not part of 0.1.
 - Front-channel logout is not supported.
 - The SSRF guard is defence in depth: a network egress allow-list is the only
   complete control. See the guard's own documentation.

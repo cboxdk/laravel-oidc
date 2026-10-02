@@ -24,4 +24,14 @@ class OutboundRequestBlocked extends OidcException
             $previous,
         );
     }
+
+    public static function redirect(string $url, Throwable $previous): self
+    {
+        return new self(
+            ErrorCode::HttpBlocked,
+            sprintf('The SSRF guard refused to send the browser to %s: %s', Url::origin($url), $previous->getMessage()),
+            'The provider\'s authorization_endpoint must be a public https URL. Check the discovery document, or change config/ssrf.php on purpose for a provider on a private network.',
+            $previous,
+        );
+    }
 }

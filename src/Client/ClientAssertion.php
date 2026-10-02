@@ -1,0 +1,71 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Cbox\Oidc\Client;
+
+use Cbox\Oidc\Config\AssertionAudience;
+use Cbox\Oidc\Config\ClientAssertionConfig;
+use Cbox\Oidc\Config\ConnectionConfig;
+use Cbox\Oidc\Discovery\ProviderMetadata;
+use Cbox\Oidc\Support\Base64Url;
+use Jose\Component\Core\AlgorithmManager;
+use Jose\Component\Signature\JWSBuilder;
+use Jose\Component\Signature\Serializer\CompactSerializer;
+use LogicException;
+use Psr\Clock\ClockInterface;
+
+/**
+ * Signs the client assertion of private_key_jwt client authentication (RFC
+ * 7523 2.2 and 3, OpenID Connect Core 9) with web-token.
+ *
+ * Claims: iss and sub are the client id, aud the token endpoint (or the
+ * issuer, when configured), jti a fresh random value, and iat, nbf and exp
+ * from the clock, valid for client_assertion.lifetime_seconds.
+ */
+final readonly class ClientAssertion
+{
+    public const string TYPE = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+
+    public function __construct(
+        private ClockInterface $clock,
+    ) {}
+
+    public function sign(ConnectionConfig $connection, ProviderMetadata $metadata): string
+    {
+        $config = $connection->clientAssertion ?? throw new LogicException(sprintf('Connection "%s" does not use private_key_jwt.', $connection->name));
+        $now = $this->clock->now()->getTimestamp();
+
+        $claims = [
+            'iss' => $connection->clientId,
+            'sub' => $connection->clientId,
+            'aud' => $config->audience === AssertionAudience::Issuer ? $metadata->issuer : $metadata->tokenEndpoint,
+            'jti' => Base64Url::random(32),
+            'iat' => $now,
+            'nbf' => $now,
+            'exp' => $now + $config->lifetimeSeconds,
+        ];
+
+        $jws = new JWSBuilder(new AlgorithmManager([$config->algorithm->signatureAlgorithm()]))
+            ->create()
+            ->withPayload(json_encode($claims, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES))
+            ->addSignature($config->key, $this->header($config))
+            ->build();
+
+        return new CompactSerializer()->serialize($jws, 0);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function header(ClientAssertionConfig $config): array
+    {
+        $header = ['alg' => $config->algorithm->value, 'typ' => 'JWT'];
+
+        if ($config->keyId !== null) {
+            $header['kid'] = $config->keyId;
+        }
+
+        return [...$header, ...$config->headers];
+    }
+}

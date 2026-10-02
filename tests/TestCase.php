@@ -44,6 +44,8 @@ abstract class TestCase extends Orchestra
     {
         $config = $app->make(Repository::class);
         $config->set('cache.default', 'array');
+        $config->set('session.driver', 'array');
+        $config->set('app.key', 'base64:'.base64_encode(str_repeat('k', 32)));
         $config->set('oidc.default', 'main');
         $config->set('oidc.connections', [
             'main' => ConnectionFixtures::minimal(),

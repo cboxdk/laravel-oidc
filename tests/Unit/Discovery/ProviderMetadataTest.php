@@ -7,6 +7,7 @@ use Cbox\Oidc\Config\ConnectionConfig;
 use Cbox\Oidc\Discovery\ProviderMetadata;
 use Cbox\Oidc\Exceptions\DiscoveryFailed;
 use Cbox\Oidc\Exceptions\ErrorCode;
+use Cbox\Oidc\Tests\Support\ClientKeys;
 use Cbox\Oidc\Tests\Support\ConnectionFixtures;
 use Cbox\Oidc\Tests\Support\FakeProvider;
 use Cbox\Oidc\Tokens\SigningAlgorithm;
@@ -155,4 +156,13 @@ it('reads only true as true for the capability flags', function (): void {
     expect($metadata->authorizationResponseIssParameterSupported)->toBeFalse()
         ->and($metadata->backchannelLogoutSupported)->toBeFalse()
         ->and($metadata->backchannelLogoutSessionSupported)->toBeFalse();
+});
+
+it('checks the client assertion algorithm against the provider\'s list', function (): void {
+    $connection = metadataConnection(['client_auth' => 'private_key_jwt', 'client_secret' => null, 'client_assertion' => ['key' => ClientKeys::ec(), 'algorithm' => 'ES256']]);
+
+    expect(ProviderMetadata::fromDocument(discoveryDocument(['token_endpoint_auth_signing_alg_values_supported' => ['RS256', 'ES256']]), $connection)->issuer)->toBe('https://idp.example.test')
+        ->and(ProviderMetadata::fromDocument(discoveryDocument(['token_endpoint_auth_signing_alg_values_supported' => null]), $connection)->issuer)->toBe('https://idp.example.test')
+        ->and(fn (): ProviderMetadata => ProviderMetadata::fromDocument(discoveryDocument(['token_endpoint_auth_signing_alg_values_supported' => ['RS256']]), $connection))
+        ->toThrow(DiscoveryFailed::class, 'does not accept client assertions signed with ES256');
 });

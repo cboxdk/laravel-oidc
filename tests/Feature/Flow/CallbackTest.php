@@ -1,0 +1,306 @@
+<?php
+
+declare(strict_types=1);
+
+use Cbox\Oidc\Config\OidcConfig;
+use Cbox\Oidc\Contracts\TransactionStore;
+use Cbox\Oidc\Exceptions\AuthorizationDenied;
+use Cbox\Oidc\Exceptions\CallbackRejected;
+use Cbox\Oidc\Exceptions\ErrorCode;
+use Cbox\Oidc\Exceptions\InvalidProviderResponse;
+use Cbox\Oidc\Exceptions\OidcException;
+use Cbox\Oidc\Exceptions\OutboundRequestBlocked;
+use Cbox\Oidc\Exceptions\ProviderUnavailable;
+use Cbox\Oidc\Exceptions\TokenRequestRejected;
+use Cbox\Oidc\Flow\AuthorizationFlow;
+use Cbox\Oidc\Flow\AuthorizationOptions;
+use Cbox\Oidc\Flow\AuthorizationTransaction;
+use Cbox\Oidc\Flow\CallbackResult;
+use Cbox\Oidc\Flow\Prompt;
+use Cbox\Oidc\Tests\Support\ConnectionFixtures;
+use Cbox\Oidc\Tests\Support\FakeProvider;
+use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+
+beforeEach(function (): void {
+    $this->freezeSecond();
+    $this->provider = new FakeProvider()->install();
+    $this->flow = fn (): AuthorizationFlow => resolve(AuthorizationFlow::class);
+    $this->callback = fn (array $query, ?string $connection = null): CallbackResult => ($this->flow)()->callback(Request::create('/oidc/callback', 'GET', $query), $connection);
+});
+
+/**
+ * @param  class-string<OidcException>  $class
+ */
+function rejectedWith(Closure $call, string $class, ErrorCode $code, string $message): void
+{
+    try {
+        $call();
+    } catch (OidcException $exception) {
+        expect($exception)->toBeInstanceOf($class)
+            ->and($exception->errorCode())->toBe($code)
+            ->and($exception->getMessage())->toContain($message);
+
+        return;
+    }
+
+    test()->fail(sprintf('Expected %s, but nothing was thrown.', $class));
+}
+
+it('exchanges the code of an approved login for tokens', function (): void {
+    $request = ($this->flow)()->start();
+    $result = ($this->callback)($this->provider->approve($request->url));
+
+    expect($result->connection)->toBe('main')
+        ->and($result->transaction->state)->toBe($request->state)
+        ->and($result->responseIssuer)->toBe(FakeProvider::ISSUER)
+        ->and($result->tokens->tokenType)->toBe('Bearer')
+        ->and($result->tokens->accessToken)->toMatch('/^[0-9a-f]{32}$/')
+        ->and($result->tokens->refreshToken)->toMatch('/^[0-9a-f]{32}$/')
+        ->and($result->tokens->idToken)->toBeString()
+        ->and($result->tokens->expiresIn)->toBe(3600)
+        ->and($result->tokens->expiresAt?->getTimestamp())->toBe(now()->getTimestamp() + 3600)
+        ->and($result->tokens->scopes)->toBe(['openid', 'profile', 'email']);
+
+    $token = $this->provider->tokenRequests[0];
+
+    expect($token['form'])->toMatchArray(['grant_type' => 'authorization_code', 'redirect_uri' => 'https://app.example.test/oidc/callback'])
+        ->and($token['form'])->toHaveKeys(['code', 'code_verifier'])
+        ->and($token['form'])->not->toHaveKeys(['client_id', 'client_secret'])
+        ->and($token['authorization'])->toBe('Basic '.base64_encode('client-1:secret-1'));
+});
+
+it('carries the nonce the ID token must repeat', function (): void {
+    $request = ($this->flow)()->start(options: new AuthorizationOptions(maxAge: 300));
+    $result = ($this->callback)($this->provider->approve($request->url));
+    $claims = json_decode(base64_decode(strtr(explode('.', (string) $result->tokens->idToken)[1], '-_', '+/'), true), true, 8, JSON_THROW_ON_ERROR);
+
+    expect($claims['nonce'])->toBe($result->transaction->nonce)
+        ->and($result->transaction->maxAge)->toBe(300);
+});
+
+it('uses a login once', function (): void {
+    $query = $this->provider->approve(($this->flow)()->start()->url);
+    ($this->callback)($query);
+
+    rejectedWith(fn (): CallbackResult => ($this->callback)($query), CallbackRejected::class, ErrorCode::StateMismatch, 'no login of this session matches its state');
+    expect($this->provider->tokenRequests)->toHaveCount(1);
+});
+
+it('keeps several logins of one session apart', function (): void {
+    $first = ($this->flow)()->start();
+    $second = ($this->flow)()->start();
+
+    expect(($this->callback)($this->provider->approve($second->url))->transaction->state)->toBe($second->state)
+        ->and(($this->callback)($this->provider->approve($first->url))->transaction->state)->toBe($first->state);
+});
+
+it('refuses a callback whose state matches no login', function (array $query, string $problem): void {
+    ($this->flow)()->start();
+
+    rejectedWith(fn (): CallbackResult => ($this->callback)($query), CallbackRejected::class, ErrorCode::StateMismatch, $problem);
+    expect($this->provider->tokenRequests)->toBe([]);
+})->with([
+    'no state' => [['code' => 'abc'], 'it has no state parameter'],
+    'an empty state' => [['code' => 'abc', 'state' => ''], 'it has no state parameter'],
+    'an unknown state' => [['code' => 'abc', 'state' => 'forged'], 'no login of this session matches its state'],
+    'a very long state' => [['code' => 'abc', 'state' => str_repeat('a', 513)], 'its state is longer than any state the package makes'],
+]);
+
+it('refuses a forged error answer that has no valid state', function (): void {
+    ($this->flow)()->start();
+
+    rejectedWith(fn (): CallbackResult => ($this->callback)(['error' => 'access_denied', 'state' => 'forged']), CallbackRejected::class, ErrorCode::StateMismatch, 'no login of this session matches its state');
+});
+
+it('refuses the state of another connection\'s login', function (): void {
+    config(['oidc.connections.second' => ConnectionFixtures::minimal(['redirect_uri' => 'https://app.example.test/oidc/second/callback'])]);
+    app()->forgetInstance(OidcConfig::class);
+    app()->forgetInstance(AuthorizationFlow::class);
+
+    $query = $this->provider->approve(($this->flow)()->start('second')->url);
+
+    rejectedWith(fn (): CallbackResult => ($this->callback)($query, 'main'), CallbackRejected::class, ErrorCode::StateMismatch, 'its state belongs to a login of connection "second"');
+    // The login was used up by the refused attempt.
+    rejectedWith(fn (): CallbackResult => ($this->callback)($query, 'second'), CallbackRejected::class, ErrorCode::StateMismatch, 'no login of this session matches its state');
+});
+
+it('refuses a login older than the transaction lifetime', function (): void {
+    config(['oidc.flow.transaction_ttl_seconds' => 120]);
+    app()->forgetInstance(OidcConfig::class);
+    app()->forgetInstance(AuthorizationFlow::class);
+
+    $query = $this->provider->approve(($this->flow)()->start()->url);
+    $this->travel(121)->seconds();
+
+    rejectedWith(fn (): CallbackResult => ($this->callback)($query), CallbackRejected::class, ErrorCode::TransactionExpired, 'was started 121 seconds ago, longer than the 120 seconds a login may take');
+});
+
+it('accepts a login at the end of its lifetime', function (): void {
+    $query = $this->provider->approve(($this->flow)()->start()->url);
+    $this->travel(600)->seconds();
+
+    expect(($this->callback)($query)->tokens->tokenType)->toBe('Bearer');
+});
+
+it('refuses an iss parameter that is not the pinned issuer (RFC 9207)', function (): void {
+    $query = [...$this->provider->approve(($this->flow)()->start()->url), 'iss' => 'https://evil.example.test'];
+
+    rejectedWith(fn (): CallbackResult => ($this->callback)($query), CallbackRejected::class, ErrorCode::CallbackIssuerMismatch, 'names the issuer "https://evil.example.test", but the connection pins "https://idp.example.test"');
+    expect($this->provider->tokenRequests)->toBe([]);
+});
+
+it('requires the iss parameter when the provider announces it', function (): void {
+    $query = $this->provider->approve(($this->flow)()->start()->url);
+    unset($query['iss']);
+
+    rejectedWith(fn (): CallbackResult => ($this->callback)($query), CallbackRejected::class, ErrorCode::CallbackIssuerMismatch, 'has no iss parameter, although the provider announces it');
+});
+
+it('checks iss when present even if the provider does not announce it', function (): void {
+    $this->provider->discovery['authorization_response_iss_parameter_supported'] = false;
+    $query = $this->provider->approve(($this->flow)()->start()->url);
+    unset($query['iss']);
+
+    expect(($this->callback)($query)->responseIssuer)->toBeNull();
+
+    $query = [...$this->provider->approve(($this->flow)()->start()->url), 'iss' => FakeProvider::ISSUER.'/'];
+
+    rejectedWith(fn (): CallbackResult => ($this->callback)($query), CallbackRejected::class, ErrorCode::CallbackIssuerMismatch, 'names the issuer "https://idp.example.test/"');
+});
+
+it('reads an Entra iss parameter against the issuer template', function (string $iss, bool $accepted): void {
+    Http::fake([
+        'https://login.microsoftonline.com/organizations/v2.0/.well-known/openid-configuration' => Http::response([
+            ...new FakeProvider()->discovery,
+            'issuer' => 'https://login.microsoftonline.com/{tenantid}/v2.0',
+        ]),
+    ]);
+    $this->fakeSsrfDns(['login.microsoftonline.com' => ['20.190.160.1'], 'idp.example.test' => [FakeProvider::ADDRESS]]);
+    config(['oidc.connections.entra' => ConnectionFixtures::entraMultiTenant()]);
+    app()->forgetInstance(OidcConfig::class);
+    app()->forgetInstance(AuthorizationFlow::class);
+    $this->provider->clients['00000000-0000-0000-0000-000000000001'] = ['secret' => 'entra-secret'];
+
+    $query = [...$this->provider->approve(($this->flow)()->start('entra')->url), 'iss' => $iss];
+
+    if ($accepted) {
+        expect(($this->callback)($query, 'entra')->responseIssuer)->toBe($iss);
+    } else {
+        rejectedWith(fn (): CallbackResult => ($this->callback)($query, 'entra'), CallbackRejected::class, ErrorCode::CallbackIssuerMismatch, 'names the issuer');
+    }
+})->with([
+    'a tenant' => ['https://login.microsoftonline.com/11111111-1111-1111-1111-111111111111/v2.0', true],
+    'the template itself' => ['https://login.microsoftonline.com/{tenantid}/v2.0', false],
+    'two path segments' => ['https://login.microsoftonline.com/a/b/v2.0', false],
+    'another host' => ['https://login.example.test/11111111-1111-1111-1111-111111111111/v2.0', false],
+    'a trailing newline' => ["https://login.microsoftonline.com/11111111-1111-1111-1111-111111111111/v2.0\n", false],
+]);
+
+it('reports the provider\'s error code and nothing of its description', function (): void {
+    $query = $this->provider->deny(($this->flow)()->start()->url, 'access_denied');
+
+    expect(fn (): CallbackResult => ($this->callback)($query))->toThrow(function (AuthorizationDenied $exception): void {
+        expect($exception->errorCode())->toBe(ErrorCode::AuthorizationDenied)
+            ->and($exception->error())->toBe('access_denied')
+            ->and($exception->interactionRequired())->toBeFalse()
+            ->and($exception->getMessage())->toContain('answered the login with the error access_denied')->not->toContain('script');
+    });
+    expect($this->provider->tokenRequests)->toBe([]);
+});
+
+it('tells a silent login that needs interaction apart', function (): void {
+    $query = $this->provider->deny(($this->flow)()->start(options: new AuthorizationOptions(prompt: Prompt::None))->url, 'login_required');
+
+    expect(fn (): CallbackResult => ($this->callback)($query))->toThrow(function (AuthorizationDenied $exception): void {
+        expect($exception->interactionRequired())->toBeTrue()
+            ->and($exception->fix())->toContain('Start a normal login');
+    });
+});
+
+it('replaces an error code that is not one', function (): void {
+    $query = [...$this->provider->deny(($this->flow)()->start()->url), 'error' => '<img src=x onerror=alert(1)>'];
+
+    expect(fn (): CallbackResult => ($this->callback)($query))->toThrow(function (AuthorizationDenied $exception): void {
+        expect($exception->error())->toBe('unrecognized_error')
+            ->and($exception->getMessage())->not->toContain('<img');
+    });
+});
+
+it('refuses a callback without a usable code', function (array $changes, string $problem): void {
+    $query = array_filter([...$this->provider->approve(($this->flow)()->start()->url), ...$changes], static fn (mixed $value): bool => $value !== null);
+
+    rejectedWith(fn (): CallbackResult => ($this->callback)($query), CallbackRejected::class, ErrorCode::CallbackInvalid, $problem);
+    expect($this->provider->tokenRequests)->toBe([]);
+})->with([
+    'no code' => [['code' => null], 'has neither a code nor an error'],
+    'a code with a newline' => [['code' => "abc\ndef"], 'has a code that is not 1 to 2048 printable ASCII characters'],
+    'a very long code' => [['code' => str_repeat('a', 2049)], 'has a code that is not 1 to 2048 printable ASCII characters'],
+    'a code as a list' => [['code' => ['a', 'b']], 'carries code in a form other than one string'],
+]);
+
+it('refuses a state given as a list', function (): void {
+    $query = $this->provider->approve(($this->flow)()->start()->url);
+
+    rejectedWith(fn (): CallbackResult => ($this->callback)([...$query, 'state' => [$query['state']]]), CallbackRejected::class, ErrorCode::CallbackInvalid, 'carries state in a form other than one string');
+});
+
+it('reports a rejected code exchange with the error code only', function (): void {
+    $request = ($this->flow)()->start();
+    $query = $this->provider->approve($request->url);
+    $query['code'] = 'another-code';
+
+    expect(fn (): CallbackResult => ($this->callback)($query))->toThrow(function (TokenRequestRejected $exception): void {
+        expect($exception->errorCode())->toBe(ErrorCode::TokenRequestRejected)
+            ->and($exception->error())->toBe('invalid_grant')
+            ->and($exception->getMessage())->toContain('refused the request with HTTP 400 and the error invalid_grant')->not->toContain('<b>')
+            ->and($exception->fix())->toContain('Start the login again');
+    });
+});
+
+it('reports wrong client credentials', function (): void {
+    $this->provider->clients['client-1']['secret'] = 'rotated';
+    $query = $this->provider->approve(($this->flow)()->start()->url);
+
+    expect(fn (): CallbackResult => ($this->callback)($query))->toThrow(function (TokenRequestRejected $exception): void {
+        expect($exception->error())->toBe('invalid_client')
+            ->and($exception->fix())->toContain('Check client_id, client_secret');
+    });
+});
+
+it('sends the verifier the code was issued for', function (): void {
+    $request = ($this->flow)()->start();
+    $query = $this->provider->approve($request->url);
+
+    // Another login's verifier: the provider refuses the code.
+    $other = ($this->flow)()->start();
+    $store = resolve(TransactionStore::class);
+    $mine = $store->pull($request->state);
+    $theirs = $store->pull($other->state);
+    $store->put(new AuthorizationTransaction('main', $request->state, (string) $mine?->nonce, (string) $theirs?->codeVerifier, (string) $mine?->redirectUri, null, (int) $mine?->createdAt));
+
+    expect(fn (): CallbackResult => ($this->callback)($query))->toThrow(TokenRequestRejected::class, 'invalid_grant');
+});
+
+it('reports a token endpoint that is down as unavailable', function (): void {
+    $this->provider->tokenResponse = fn (): mixed => Http::response('busy', 503);
+    $query = $this->provider->approve(($this->flow)()->start()->url);
+
+    expect(fn (): CallbackResult => ($this->callback)($query))->toThrow(ProviderUnavailable::class, 'HTTP 503');
+});
+
+it('refuses a token response without an ID token', function (): void {
+    $this->provider->tokenResponse = fn (): mixed => Http::response(['access_token' => 'a', 'token_type' => 'Bearer']);
+    $query = $this->provider->approve(($this->flow)()->start()->url);
+
+    expect(fn (): CallbackResult => ($this->callback)($query))->toThrow(InvalidProviderResponse::class, 'it has no id_token');
+});
+
+it('sends the token request through the SSRF guard', function (): void {
+    $this->provider->discovery['token_endpoint'] = 'https://internal.example.test/oauth/token';
+    $query = $this->provider->approve(($this->flow)()->start()->url);
+
+    expect(fn (): CallbackResult => ($this->callback)($query))->toThrow(OutboundRequestBlocked::class);
+    Http::assertNotSent(fn (ClientRequest $request): bool => str_contains($request->url(), 'internal.example.test'));
+});

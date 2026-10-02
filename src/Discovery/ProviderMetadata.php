@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cbox\Oidc\Discovery;
 
+use Cbox\Oidc\Config\ClientAssertionConfig;
 use Cbox\Oidc\Config\ClientAuthMethod;
 use Cbox\Oidc\Config\ConnectionConfig;
 use Cbox\Oidc\Exceptions\DiscoveryFailed;
@@ -126,6 +127,11 @@ final readonly class ProviderMetadata
         }
 
         $fix = sprintf('Set oidc.connections.%s.client_auth to a method the provider lists.', $connection->name);
+
+        if ($connection->clientAssertion instanceof ClientAssertionConfig) {
+            $algorithm = $connection->clientAssertion->algorithm->value;
+            self::assertSupports($document, 'token_endpoint_auth_signing_alg_values_supported', $algorithm, sprintf('does not accept client assertions signed with %s (token_endpoint_auth_signing_alg_values_supported)', $algorithm), sprintf('Set oidc.connections.%s.client_assertion.algorithm to an algorithm the provider lists, with a key that fits it.', $connection->name), $invalid);
+        }
 
         if (array_key_exists('token_endpoint_auth_methods_supported', $document)) {
             self::assertSupports($document, 'token_endpoint_auth_methods_supported', $connection->clientAuth->value, sprintf('does not support client_auth %s (token_endpoint_auth_methods_supported)', $connection->clientAuth->value), $fix, $invalid);

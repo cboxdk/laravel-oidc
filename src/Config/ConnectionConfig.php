@@ -51,6 +51,7 @@ readonly class ConnectionConfig
         public GroupsConfig $groups,
         public ?string $postLogoutRedirectUri,
         public array $authorizationParameters,
+        public ?ClientAssertionConfig $clientAssertion = null,
     ) {}
 
     public static function fromConfig(string $name, ConfigReader $config): self
@@ -74,13 +75,23 @@ readonly class ConnectionConfig
         $clientAuth = ClientAuthMethod::tryFrom($config->string('client_auth', ClientAuthMethod::ClientSecretBasic->value));
 
         if ($clientAuth === null) {
-            throw InvalidConfiguration::at($config->key('client_auth'), 'is not a supported client authentication method', sprintf('Set %s to client_secret_basic, client_secret_post or none.', $config->key('client_auth')));
+            throw InvalidConfiguration::at($config->key('client_auth'), 'is not a supported client authentication method', sprintf('Set %s to one of %s.', $config->key('client_auth'), implode(', ', ClientAuthMethod::names())));
         }
 
         $secret = $config->nullableString('client_secret');
 
         if ($clientAuth->needsSecret() && $secret === null) {
             throw InvalidConfiguration::at($config->key('client_secret'), sprintf('is required for client_auth %s', $clientAuth->value), sprintf('Set %s (usually OIDC_CLIENT_SECRET), or client_auth to none for a public client.', $config->key('client_secret')));
+        }
+
+        $clientAssertion = null;
+
+        if ($clientAuth === ClientAuthMethod::PrivateKeyJwt) {
+            if (! $config->has('client_assertion')) {
+                throw InvalidConfiguration::at($config->key('client_assertion'), 'is required for client_auth private_key_jwt', sprintf('Set %s.key_path (or key) to your private key, as the published config/oidc.php shows.', $config->key('client_assertion')));
+            }
+
+            $clientAssertion = ClientAssertionConfig::fromConfig($config->child('client_assertion'), $templated);
         }
 
         return new self(
@@ -100,6 +111,7 @@ readonly class ConnectionConfig
             groups: $config->has('groups') ? GroupsConfig::fromConfig($config->child('groups')) : new GroupsConfig,
             postLogoutRedirectUri: $config->has('post_logout_redirect_uri') ? $config->browserUrl('post_logout_redirect_uri') : null,
             authorizationParameters: self::authorizationParameters($config),
+            clientAssertion: $clientAssertion,
         );
     }
 
@@ -135,6 +147,7 @@ readonly class ConnectionConfig
             'groups' => $this->groups,
             'postLogoutRedirectUri' => $this->postLogoutRedirectUri,
             'authorizationParameters' => $this->authorizationParameters,
+            'clientAssertion' => $this->clientAssertion,
         ];
     }
 
@@ -164,7 +177,7 @@ readonly class ConnectionConfig
 
         foreach ($scopes as $index => $scope) {
             // RFC 6749 3.3 scope-token: %x21 / %x23-5B / %x5D-7E.
-            if (preg_match('/^[\x21\x23-\x5B\x5D-\x7E]+$/', $scope) !== 1) {
+            if (preg_match('/^[\x21\x23-\x5B\x5D-\x7E]+$/D', $scope) !== 1) {
                 throw InvalidConfiguration::at(sprintf('%s.%d', $config->key('scopes'), $index), 'is not a valid scope', sprintf('Use printable ASCII without spaces, quotes or backslashes in %s.', $config->key('scopes')));
             }
         }

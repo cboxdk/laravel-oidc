@@ -42,10 +42,37 @@ the class of report we most want.
   the algorithm (type, curve, at least 2048-bit RSA, EC points on the curve),
   and an unknown `kid` refetches the key set at most once per cooldown.
 
+## What the login flow prevents
+
+- **Login CSRF and injected codes.** Every login gets a fresh 256-bit state,
+  kept server-side under its SHA-256 and compared in constant time. A callback
+  is accepted only for a login this session started for this connection, once,
+  and within `oidc.flow.transaction_ttl_seconds`. The state is checked before
+  anything else, so a forged code or error is refused without a call to the
+  provider.
+- **Stolen codes.** PKCE with S256 is always sent, also by confidential
+  clients; the verifier never leaves the server except to the token endpoint.
+- **Replayed ID tokens.** A fresh nonce per login is kept for the ID token
+  check.
+- **Mix-up attacks.** Each connection has its own callback, and the `iss`
+  parameter (RFC 9207) must be the pinned issuer whenever the callback carries
+  it or the provider announces it.
+- **Injected text.** Only the OAuth error code of an error answer is read, and
+  only when it is letters, digits, dots, dashes and underscores;
+  `error_description` never reaches a message, log or page.
+- **Open redirects.** The authorization URL is built from the checked
+  discovery document and passes the SSRF guard's redirect check.
+- Tokens, the nonce, the PKCE verifier and private keys are redacted when
+  dumped.
+
 ## Honest scope
 
 - The package is a relying party. It issues no tokens.
-- Encrypted ID tokens (JWE), signed userinfo and `private_key_jwt` client
-  authentication are not part of 0.1. Front-channel logout is not supported.
+- Encrypted ID tokens (JWE), signed userinfo, pushed authorization requests
+  (PAR), DPoP and the form_post response mode are not part of 0.1.
+  Front-channel logout is not supported.
+- The default transaction store trusts the Laravel session. A session that
+  cannot reach the callback (a `SameSite=strict` cookie) makes every login
+  fail closed with `oidc_state_mismatch`.
 - The SSRF guard is defence in depth; a network egress allow-list is the only
   complete control.

@@ -1,7 +1,7 @@
 ---
 title: Errors
 description: Every error code, what it means and whether a retry can help
-weight: 17
+weight: 18
 ---
 
 # Errors
@@ -35,3 +35,10 @@ secret.
 | `oidc_jwks_invalid` | `KeySetInvalid` | The key set is not `{"keys": [...]}`, or holds more than 100 keys. | No |
 | `oidc_signing_key_not_found` | `SigningKeyNotFound` | No key matches the token's `kid`, or without a `kid` no single key fits. Rotation is handled for you; see [key rotation](discovery-and-keys.md#key-rotation). | After the cooldown |
 | `oidc_signing_key_unsuitable` | `SigningKeyUnsuitable` | The key the token names may not verify it: wrong type, curve, size, use or alg. | No |
+| `oidc_authorization_options_invalid` | `InvalidAuthorizationOptions` | An `AuthorizationOptions` value is invalid, such as `Prompt::None` with another prompt or a protocol parameter in `parameters`. | No |
+| `oidc_state_mismatch` | `CallbackRejected` | The callback's state matches no login this session started for the connection: forged, used already, from another browser, or the session was lost on the way. | Start again |
+| `oidc_transaction_expired` | `CallbackRejected` | The login was started longer ago than `oidc.flow.transaction_ttl_seconds`. | Start again |
+| `oidc_callback_issuer_mismatch` | `CallbackRejected` | The callback's `iss` is missing although the provider announces it, or names another issuer (RFC 9207). | Start again |
+| `oidc_callback_invalid` | `CallbackRejected` | The callback has no usable code, or a parameter in another form than one string. | Start again |
+| `oidc_authorization_denied` | `AuthorizationDenied` | The provider answered with an OAuth error; `error()` gives the code, `interactionRequired()` tells a silent login that needs the person. | Start again |
+| `oidc_token_request_rejected` | `TokenRequestRejected` | The token endpoint refused the request; `error()` gives the code, such as `invalid_grant` or `invalid_client`. | Depends on the code |

@@ -22,6 +22,7 @@ Numbers may be given as strings, as `env()` returns them.
 | `connections` | one connection, `main` | At least one. Names are letters, digits, `.`, `-` and `_`, at most 64 characters. |
 | `http` | see below | |
 | `cache` | see below | |
+| `flow` | see below | |
 
 `OidcConfig::connection($name)` returns a connection; `null` gives the default.
 An unknown name throws `UnknownConnection` (`oidc_connection_unknown`), which
@@ -34,8 +35,9 @@ lists the configured names.
 | `issuer` | required | https, absolute, no user info, query or fragment. Compared exactly with the provider's metadata, so write it as the provider does, trailing slash or not. May contain `{tenantid}` once (Microsoft Entra multi-tenant). |
 | `discovery_url` | `issuer` + `/.well-known/openid-configuration` | https. Required when the issuer contains `{tenantid}`. |
 | `client_id` | required | Non-empty. |
-| `client_secret` | `null` | Required unless `client_auth` is `none`. Redacted when the connection is dumped. |
-| `client_auth` | `client_secret_basic` | `client_secret_basic`, `client_secret_post` or `none` (public client, PKCE only). |
+| `client_secret` | `null` | Required for `client_secret_basic` and `client_secret_post`; dropped for the others. Redacted when the connection is dumped. |
+| `client_auth` | `client_secret_basic` | `client_secret_basic`, `client_secret_post`, `private_key_jwt` (see `client_assertion`) or `none` (public client, PKCE only). |
+| `client_assertion` | see below | Read only for `private_key_jwt`, and then required. |
 | `redirect_uri` | required | Absolute http or https URL. Register exactly this URL at the provider. |
 | `scopes` | `openid profile email` | Must contain `openid`. Each is an RFC 6749 scope token. Duplicates are dropped. |
 | `algorithms` | `RS256 PS256 ES256 EdDSA` in the published file | Any of `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `ES512`, `EdDSA`. `none` and `HS*` are refused. |
@@ -46,6 +48,29 @@ lists the configured names.
 | `groups` | `['source' => 'id_token', 'claim' => 'groups']` | `source` is `id_token`, `userinfo` or `none`. |
 | `post_logout_redirect_uri` | `null` | Absolute http or https URL. |
 | `authorization_parameters` | `[]` | Map of extra parameters, such as Google's `access_type`. `client_id`, `code_challenge`, `code_challenge_method`, `max_age`, `nonce`, `redirect_uri`, `request`, `request_uri`, `response_mode`, `response_type`, `scope` and `state` are refused, in any case. |
+
+## client_assertion
+
+Read when `client_auth` is `private_key_jwt`. The key is loaded when the
+configuration is parsed, so a wrong key fails at once.
+
+| Key | Default | Rule |
+|---|---|---|
+| `key` | `null` | The private key as PEM text. Exactly one of `key` and `key_path`. |
+| `key_path` | `null` | A local PEM file this process can read. Stream wrappers (`https://`, `phar:`, `data:`) are refused. |
+| `passphrase` | `null` | For an encrypted key. |
+| `key_id` | `null` | Sent as the `kid` header. |
+| `algorithm` | `RS256` | One of the ID token algorithms. The key must fit it: RSA of at least 2048 bits, EC on its curve, or Ed25519 for `EdDSA`. When the provider lists `token_endpoint_auth_signing_alg_values_supported`, it must be there. |
+| `audience` | `token_endpoint` | `token_endpoint` (OpenID Connect Core; Entra and Okta require it) or `issuer` (not with a `{tenantid}` issuer). |
+| `headers` | `[]` | Extra header members, such as Entra's `x5t#S256`. `alg`, `kid`, `typ`, `crit`, `jku`, `jwk`, `x5u`, `b64`, `enc` and `zip` are refused. |
+| `lifetime_seconds` | `60` | 10 to 600. |
+
+## flow
+
+| Key | Default | Rule |
+|---|---|---|
+| `transaction_ttl_seconds` | `600` | 30 to 3600. How long a started login may wait for its callback. |
+| `max_pending_transactions` | `5` | 1 to 50. Started logins kept per session, newest first. |
 
 ## http
 

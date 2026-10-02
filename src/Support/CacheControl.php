@@ -39,7 +39,7 @@ final class CacheControl
                 return 0;
             }
 
-            if (preg_match('/^max-age\s*=\s*"?(\d{1,10})"?$/', $directive, $match) === 1) {
+            if (preg_match('/^max-age\s*=\s*"?(\d{1,10})"?$/D', $directive, $match) === 1) {
                 $age = (int) $match[1];
             }
         }

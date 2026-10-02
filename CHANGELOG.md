@@ -47,6 +47,42 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   in the configured store, key sets for the provider's `max-age` within the
   configured bounds. The new `oidc.cache.stale_if_error_seconds` (one day by
   default) keeps a stale copy in use while the provider is unavailable.
+- **The authorization code flow.** `AuthorizationFlow::start()` (or
+  `redirect()`) makes a fresh 256-bit state and nonce and a PKCE S256
+  verifier, keeps them in a `TransactionStore`, and returns an
+  `AuthorizationRequest` that Laravel answers as a redirect. Per-login
+  `AuthorizationOptions` add `prompt`, `max_age`, `login_hint`, scopes,
+  `acr_values` and other parameters, each checked where it is written
+  (`oidc_authorization_options_invalid`). The authorization URL keeps the
+  endpoint's own query and passes the SSRF guard's redirect check.
+- **The callback.** `AuthorizationFlow::callback()` checks, in order, the
+  state (bound to this session and connection, used once, within
+  `oidc.flow.transaction_ttl_seconds`), the RFC 9207 `iss` parameter (Entra's
+  `{tenantid}` template included), an error answer (`AuthorizationDenied`, with
+  the error code only and `interactionRequired()` for silent logins) and the
+  code, then exchanges the code. Failures are `CallbackRejected`
+  (`oidc_state_mismatch`, `oidc_transaction_expired`,
+  `oidc_callback_issuer_mismatch`, `oidc_callback_invalid`). It returns a
+  `CallbackResult` with the `TokenSet`; the ID token is not verified yet.
+- **The token endpoint.** `TokenEndpoint` sends grants with the connection's
+  client authentication: `client_secret_basic` (form-encoded first, as RFC
+  6749 2.3.1 says), `client_secret_post`, the new `private_key_jwt` (RFC 7523,
+  signed with web-token from a PEM key under `client_assertion`, RSA, EC or
+  Ed25519) or none. A token response must be a JSON object with an
+  `access_token`, `token_type` Bearer and, for a code, an `id_token`; an OAuth
+  error is `TokenRequestRejected` (`oidc_token_request_rejected`) with its
+  error code only.
+- **A session transaction store.** `SessionTransactionStore`, the default
+  `TransactionStore`, keeps started logins in the Laravel session under the
+  SHA-256 of their state, at most `oidc.flow.max_pending_transactions` (5) at
+  once. Bind your own to keep them elsewhere.
 - **A PSR-20 clock.** The package reads time from `Psr\Clock\ClockInterface`;
   the default `CarbonClock` follows Carbon, so Laravel's time travel moves it in
   tests. An application's own clock or HTTP client binding wins.
+
+### Fixed
+
+- **Anchored patterns accepted a trailing newline.** A scope, connection name
+  or number in `config/oidc.php` ending in a newline passed its check, because
+  `$` in a PHP pattern also matches before a final newline. Every anchored
+  pattern now uses the `D` modifier.

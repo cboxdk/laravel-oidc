@@ -24,6 +24,7 @@ readonly class OidcConfig
         public array $connections,
         public HttpConfig $http = new HttpConfig,
         public CacheConfig $cache = new CacheConfig,
+        public FlowConfig $flow = new FlowConfig,
     ) {}
 
     public static function fromArray(mixed $values): self
@@ -33,7 +34,7 @@ readonly class OidcConfig
         $connections = [];
 
         foreach ($connectionsConfig->names() as $name) {
-            if (preg_match('/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/', $name) !== 1) {
+            if (preg_match('/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/D', $name) !== 1) {
                 throw InvalidConfiguration::at($connectionsConfig->key($name), 'is not a valid connection name', 'Name connections with letters, digits, dots, dashes and underscores, at most 64 characters.');
             }
 
@@ -55,6 +56,7 @@ readonly class OidcConfig
             $connections,
             $config->has('http') ? HttpConfig::fromConfig($config->child('http')) : new HttpConfig,
             $config->has('cache') ? CacheConfig::fromConfig($config->child('cache')) : new CacheConfig,
+            $config->has('flow') ? FlowConfig::fromConfig($config->child('flow')) : new FlowConfig,
         );
     }
 

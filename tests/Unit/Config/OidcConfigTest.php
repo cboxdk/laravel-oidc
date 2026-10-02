@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Cbox\Oidc\Config\CacheConfig;
 use Cbox\Oidc\Config\ClientAuthMethod;
 use Cbox\Oidc\Config\ConnectionConfig;
+use Cbox\Oidc\Config\FlowConfig;
 use Cbox\Oidc\Config\GroupsSource;
 use Cbox\Oidc\Config\HttpConfig;
 use Cbox\Oidc\Config\OidcConfig;
@@ -130,11 +131,12 @@ it('refuses an invalid connection value', function (array $overrides, string $ke
     'http discovery url' => [['discovery_url' => 'http://idp.example.test/.well-known/openid-configuration'], 'oidc.connections.main.discovery_url', 'must be an absolute https URL'],
     'missing client id' => [['client_id' => ''], 'oidc.connections.main.client_id', 'must be a non-empty string'],
     'missing secret' => [['client_secret' => null], 'oidc.connections.main.client_secret', 'is required for client_auth client_secret_basic'],
-    'unknown client auth' => [['client_auth' => 'private_key_jwt'], 'oidc.connections.main.client_auth', 'is not a supported client authentication method'],
+    'unknown client auth' => [['client_auth' => 'tls_client_auth'], 'oidc.connections.main.client_auth', 'is not a supported client authentication method'],
     'relative redirect uri' => [['redirect_uri' => '/callback'], 'oidc.connections.main.redirect_uri', 'must be an absolute http or https URL'],
     'javascript redirect uri' => [['redirect_uri' => 'javascript://app.example.test/%0aalert(1)'], 'oidc.connections.main.redirect_uri', 'must be an absolute http or https URL'],
     'scopes without openid' => [['scopes' => ['profile']], 'oidc.connections.main.scopes', 'must contain openid'],
     'scope with a space' => [['scopes' => ['openid', 'a b']], 'oidc.connections.main.scopes.1', 'is not a valid scope'],
+    'scope with a trailing newline' => [['scopes' => ['openid', "email\n"]], 'oidc.connections.main.scopes.1', 'is not a valid scope'],
     'scopes as a string' => [['scopes' => 'openid profile'], 'oidc.connections.main.scopes', 'must be a list of strings'],
     'algorithm none' => [['algorithms' => ['none']], 'oidc.connections.main.algorithms.0', 'names "none", which is not an accepted ID token algorithm'],
     'algorithm HS256' => [['algorithms' => ['RS256', 'HS256']], 'oidc.connections.main.algorithms.1', 'names "HS256"'],
@@ -202,18 +204,24 @@ it('refuses an invalid top-level value', function (mixed $values, string $key): 
     'no connections' => [['connections' => []], 'oidc.connections defines no connection'],
     'unnamed connection' => [['connections' => [ConnectionFixtures::minimal()]], 'oidc.connections.0 is not named'],
     'bad connection name' => [['connections' => ['main app' => ConnectionFixtures::minimal()]], 'oidc.connections.main app is not a valid connection name'],
+    'connection name with a trailing newline' => [['connections' => ["main\n" => ConnectionFixtures::minimal()]], 'is not a valid connection name'],
+    'transaction ttl too short' => [['connections' => ['main' => ConnectionFixtures::minimal()], 'flow' => ['transaction_ttl_seconds' => 5]], 'oidc.flow.transaction_ttl_seconds must be a whole number from 30 to 3600'],
+    'no pending transactions' => [['connections' => ['main' => ConnectionFixtures::minimal()], 'flow' => ['max_pending_transactions' => 0]], 'oidc.flow.max_pending_transactions must be a whole number from 1 to 50'],
     'unknown default' => [['default' => 'other', 'connections' => ['main' => ConnectionFixtures::minimal()]], 'oidc.default names "other", which is not a configured connection'],
     'timeout too long' => [['connections' => ['main' => ConnectionFixtures::minimal()], 'http' => ['timeout_seconds' => 61]], 'oidc.http.timeout_seconds must be a number from 0.1 to 60'],
     'stale_if_error too long' => [['connections' => ['main' => ConnectionFixtures::minimal()], 'cache' => ['stale_if_error_seconds' => 604801]], 'oidc.cache.stale_if_error_seconds must be a whole number from 0 to 604800'],
     'jwks ttl range inverted' => [['connections' => ['main' => ConnectionFixtures::minimal()], 'cache' => ['jwks_min_ttl_seconds' => 900, 'jwks_max_ttl_seconds' => 600]], 'oidc.cache.jwks_min_ttl_seconds is larger than jwks_max_ttl_seconds'],
 ]);
 
-it('reads the http and cache settings', function (): void {
+it('reads the http, cache and flow settings', function (): void {
     $config = oidcConfig(ConnectionFixtures::minimal(), [
+        'flow' => ['transaction_ttl_seconds' => '900', 'max_pending_transactions' => 3],
         'http' => ['timeout_seconds' => '2.5', 'connect_timeout_seconds' => 1, 'max_response_bytes' => 65536],
         'cache' => ['store' => 'redis', 'discovery_ttl_seconds' => 3600, 'jwks_default_ttl_seconds' => 600, 'jwks_min_ttl_seconds' => 60, 'jwks_max_ttl_seconds' => 7200, 'jwks_refetch_cooldown_seconds' => 30, 'stale_if_error_seconds' => '0'],
     ]);
 
     expect($config->http)->toEqual(new HttpConfig(2.5, 1.0, 65536))
-        ->and($config->cache)->toEqual(new CacheConfig('redis', 3600, 600, 60, 7200, 30, 0));
+        ->and($config->cache)->toEqual(new CacheConfig('redis', 3600, 600, 60, 7200, 30, 0))
+        ->and($config->flow)->toEqual(new FlowConfig(900, 3))
+        ->and(oidcConfig(ConnectionFixtures::minimal())->flow)->toEqual(new FlowConfig(600, 5));
 });

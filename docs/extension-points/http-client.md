@@ -8,8 +8,8 @@ weight: 26
 
 ## The HTTP client
 
-Every call the package makes to a provider (discovery, keys, and in later
-versions token, userinfo and revocation) goes through one contract,
+Every call the package makes to a provider (discovery, keys, the token
+endpoint, and in later versions userinfo and revocation) goes through one contract,
 `Cbox\Oidc\Contracts\HttpClient`:
 
 ```php
@@ -84,7 +84,8 @@ tests, give the provider's host a public address with its
 ## The clock
 
 The package reads time only from a PSR-20 `Psr\Clock\ClockInterface`: cache
-freshness today, token expiry in later versions. The default,
+freshness, the lifetime of started logins, client assertions and token
+expiry. The default,
 `Cbox\Oidc\Support\CarbonClock`, returns Carbon's now in UTC, so Laravel's
 `$this->travel()`, `travelTo()` and `freezeTime()` move it in your tests.
 

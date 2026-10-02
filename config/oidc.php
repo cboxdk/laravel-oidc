@@ -37,9 +37,27 @@ return [
             'client_id' => env('OIDC_CLIENT_ID'),
             'client_secret' => env('OIDC_CLIENT_SECRET'),
 
-            // client_secret_basic, client_secret_post, or none for a public
-            // client (PKCE only, no secret).
+            // client_secret_basic, client_secret_post, private_key_jwt (a JWT
+            // signed with your private key, see client_assertion), or none for
+            // a public client (PKCE only, no secret).
             'client_auth' => 'client_secret_basic',
+
+            // Only read when client_auth is private_key_jwt.
+            'client_assertion' => [
+                // The private key: PEM text in key, or a PEM file in key_path.
+                'key' => env('OIDC_CLIENT_KEY'),
+                'key_path' => env('OIDC_CLIENT_KEY_PATH'),
+                'passphrase' => env('OIDC_CLIENT_KEY_PASSPHRASE'),
+                // Sent as kid, so the provider finds the public key.
+                'key_id' => env('OIDC_CLIENT_KEY_ID'),
+                // RS256, PS256, ES256 or EdDSA (and the 384/512 variants).
+                'algorithm' => 'RS256',
+                // token_endpoint (OpenID Connect Core; Entra, Okta) or issuer.
+                'audience' => 'token_endpoint',
+                // Extra header members, such as Entra's x5t#S256 thumbprint.
+                'headers' => [],
+                'lifetime_seconds' => 60,
+            ],
 
             // Where the provider sends the browser back after login. Register
             // exactly this URL at the provider.
@@ -98,6 +116,15 @@ return [
         'connect_timeout_seconds' => 2,
         // Largest response body accepted from a provider.
         'max_response_bytes' => 262144,
+    ],
+
+    /*
+     * The authorization flow: how long a started login may wait for its
+     * callback, and how many may wait at once per session (one per tab).
+     */
+    'flow' => [
+        'transaction_ttl_seconds' => 600,
+        'max_pending_transactions' => 5,
     ],
 
     /*

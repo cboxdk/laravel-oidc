@@ -90,7 +90,7 @@ readonly class ConfigReader
     {
         $value = $this->values[$key] ?? $default;
 
-        if (is_string($value) && preg_match('/^-?\d+$/', $value) === 1) {
+        if (is_string($value) && preg_match('/^-?\d+$/D', $value) === 1) {
             $value = (int) $value;
         }
 

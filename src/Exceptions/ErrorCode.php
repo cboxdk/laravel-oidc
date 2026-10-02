@@ -45,4 +45,29 @@ enum ErrorCode: string
 
     /** The key the token names exists but may not verify it (type, curve, size, use or alg). */
     case SigningKeyUnsuitable = 'oidc_signing_key_unsuitable';
+
+    /** Options passed when starting a login are invalid, such as a reserved parameter or prompt=none with another prompt. */
+    case AuthorizationOptionsInvalid = 'oidc_authorization_options_invalid';
+
+    /**
+     * The callback's state matches no login this session started for the
+     * connection: forged, replayed, from another browser, or the session was
+     * lost on the way back.
+     */
+    case StateMismatch = 'oidc_state_mismatch';
+
+    /** The login was started longer ago than oidc.flow.transaction_ttl_seconds. */
+    case TransactionExpired = 'oidc_transaction_expired';
+
+    /** The callback's iss parameter is missing or names another issuer (RFC 9207, mix-up defence). */
+    case CallbackIssuerMismatch = 'oidc_callback_issuer_mismatch';
+
+    /** The provider answered the login with an OAuth error, such as access_denied or login_required. */
+    case AuthorizationDenied = 'oidc_authorization_denied';
+
+    /** The callback carries no usable code, or a parameter in a form the protocol does not allow. */
+    case CallbackInvalid = 'oidc_callback_invalid';
+
+    /** The token endpoint refused the request with an OAuth error, such as invalid_grant or invalid_client. */
+    case TokenRequestRejected = 'oidc_token_request_rejected';
 }
